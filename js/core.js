@@ -92,30 +92,23 @@ GTA.Game = function ( ) {
         this.activeObjects.push( car );
 
         // ── Carros adicionais espalhados por Liberty City ──────
+        // Usa tipos válidos do jogo (4, 44, 58) e posições nas ruas
         // [type, x, y, z, angle]
         var extraCars = [
-            [0,  170, 165, 255, 200],
-            [1,  205, 178, 255, 512],
-            [5,  255, 195, 255, 100],
-            [10, 295, 215, 255, 700],
-            [15, 335, 235, 255, 350],
-            [20, 218, 258, 255, 600],
-            [25, 268, 278, 255, 200],
-            [30, 308, 298, 255, 900],
-            [35, 258, 318, 255, 100],
-            [40, 198, 308, 255, 450],
-            [2,  175, 285, 255, 800],
-            [6,  183, 245, 255, 250],
-            [8,  348, 205, 255, 300],
-            [12, 368, 245, 255, 100],
-            [16, 378, 282, 255, 720],
-            [18, 358, 312, 255, 400],
-            [22, 288, 342, 255, 200],
-            [26, 228, 352, 255, 650],
-            [32, 168, 332, 255, 300],
-            [36, 152, 292, 255, 800],
-            [42, 230, 170, 255, 500],
-            [48, 310, 175, 255, 100],
+            // Rua horizontal y≈200
+            [58, 252, 198, 255,   0],
+            [4,  295, 202, 255, 128],
+            [44, 355, 197, 255,  64],
+            [58, 388, 208, 255, 192],
+            // Rua horizontal y≈250
+            [4,  218, 249, 255,   0],
+            [44, 265, 252, 255, 128],
+            [58, 315, 251, 255,  64],
+            [4,  362, 248, 255, 192],
+            // Rua horizontal y≈300
+            [44, 238, 302, 255, 128],
+            [58, 305, 299, 255,   0],
+            [4,  370, 305, 255,  64],
         ];
 
         extraCars.forEach(function(d) {
@@ -150,6 +143,11 @@ GTA.Game = function ( ) {
         this.scene.add( this.map.sections [ 0 ][ 1 ] );
         this.scene.add( this.map.sections [ 1 ][ 1 ] );
         this.scene.add( this.map.sections [ 1 ][ 2 ] );
+
+        // Esconde tela de carregamento
+        var loadEl = document.getElementById('_loading');
+        if (loadEl) loadEl.style.display = 'none';
+
         methods.animate();
     };
    
