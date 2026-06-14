@@ -164,37 +164,31 @@ GTA.Player.prototype.updateDriving = function ( delta ) {
     var car       = this.currentCar;
     var carPhys   = car.physics;
     var angle     = carPhys.GetAngle();
-    var carSpeed  = 12;       // velocidade máxima (unidades física)
-    var accel     = 4;        // força de aceleração
+    var carSpeed  = 8;        // velocidade (unidades física)
     var turnSpeed = 0.055;
 
-    var vel = carPhys.GetLinearVelocity();
-    var curSpeed = Math.sqrt(vel.x*vel.x + vel.y*vel.y);
+    // Acorda o corpo Box2D (pode estar em sleeping state)
+    carPhys.SetAwake(true);
 
-    if (this.moveForward && curSpeed < carSpeed) {
-        carPhys.ApplyForce(
-            new Box2D.Common.Math.b2Vec2(
-                Math.cos(angle) * accel,
-                Math.sin(angle) * accel
-            ),
-            carPhys.GetPosition()
-        );
-    }
-
-    if (this.moveBackward) {
-        carPhys.ApplyForce(
-            new Box2D.Common.Math.b2Vec2(
-                -Math.cos(angle) * accel * 0.5,
-                -Math.sin(angle) * accel * 0.5
-            ),
-            carPhys.GetPosition()
-        );
-    }
-
-    if (!this.moveForward && !this.moveBackward) {
-        // Fricção natural
+    if (this.moveForward) {
         carPhys.SetLinearVelocity(
-            new Box2D.Common.Math.b2Vec2(vel.x * 0.92, vel.y * 0.92)
+            new Box2D.Common.Math.b2Vec2(
+                Math.cos(angle) * carSpeed,
+                Math.sin(angle) * carSpeed
+            )
+        );
+    } else if (this.moveBackward) {
+        carPhys.SetLinearVelocity(
+            new Box2D.Common.Math.b2Vec2(
+                -Math.cos(angle) * carSpeed * 0.5,
+                -Math.sin(angle) * carSpeed * 0.5
+            )
+        );
+    } else {
+        // Fricção natural
+        var vel = carPhys.GetLinearVelocity();
+        carPhys.SetLinearVelocity(
+            new Box2D.Common.Math.b2Vec2(vel.x * 0.85, vel.y * 0.85)
         );
     }
 
