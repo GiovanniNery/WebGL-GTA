@@ -1,148 +1,212 @@
 /* 
-* @author Niklas von Hertzen <niklas at hertzen.com>
-* @created 4.1.2012 
-* @website http://hertzen.com
+ * @author Niklas von Hertzen <niklas at hertzen.com>
+ * @created 4.1.2012
+ * Enhanced: enter/exit car, drive car, AI pedestrian compat
  */
 
-
+var _pedOrigUpdate = GTA.Pedestrian.prototype.update;
 
 GTA.Player = function ( game, x, y, z ) {
 
-    
     this.position.x = x;
     this.position.y = y;
     this.position.z = z;
 
     this.registerAnimations( game.spriteNumbers.offset.PED );
-    
     this.initPhysics( game );
     
+    var geom = THREE.GeometryUtils.clone( game.sprites[ this.animationSprites[0][0] ].sprite.geometry );
+    this.sprite = new THREE.Mesh( geom, game.sprites[ this.animationSprites[0][0] ].sprite.material );
+    this.sprite.geometry.dynamic = true;
     
-    var geom = THREE.GeometryUtils.clone( game.sprites[ this.animationSprites[ 0 ][ 0 ] ].sprite.geometry );
-    
-    this.sprite = new THREE.Mesh( geom, game.sprites[ this.animationSprites[ 0 ][ 0 ] ].sprite.material );
-    
-    //this.sprite = THREE.SceneUtils.cloneObject( game.sprites[ this.animationSprites[ 0 ][ 0 ] ].sprite );
-
-    //this.sprite.geometry = THREE.GeometryUtils.clone( this.sprite.geometry );
-    this.sprite.geometry.dynamic = true; 
-    
-    this.spriteAnimator = new GTA.SpriteAnimation( game, this.animationSprites[ 0 ][ 0 ], this.sprite ); 
-
-    this.game =  game;
-
+    this.spriteAnimator = new GTA.SpriteAnimation( game, this.animationSprites[0][0], this.sprite );
+    this.game = game;
     this.add( this.sprite );
+    
     this.speed = 700;
     this.rotationSpeed = 0.1;
-    
- 
-    
     this.weapon = 0;
-    
     this.lastframe = 0;
-    
     this.runningFrames = [];
     this.spriteframe = 0;
     
-   
+    this._isPlayer = true;
     
-    
-    
+    this.inCar = false;
+    this.currentCar = null;
     
     this.domElement = document;
-    
-    
+
+    var self = this;
+
     this.onKeyDown = function ( event ) {
         switch( event.keyCode ) {
-
-            case 38: /*up*/
-            case 87: /*W*/
-                this.moveForward = true;
-                break;
-
-            case 37: /*left*/
-            case 65: /*A*/
-                this.turnLeft = true;
-                break;
-
-            case 40: /*down*/
-            case 83: /*S*/
-                this.moveBackward = true;
-                break;
-
-            case 39: /*right*/
-            case 68: /*D*/
-                this.turnRight = true;
-                break;
-
-            case 82: /*R*/
-                this.moveUp = true;
-                break;
-            case 70: /*F*/
-                this.moveDown = true;
-                break;
-
-            case 81: /*Q*/
-                this.freeze = !this.freeze;
-                break;
-
+            case 38: case 87: self.moveForward   = true;  break;
+            case 37: case 65: self.turnLeft      = true;  break;
+            case 40: case 83: self.moveBackward  = true;  break;
+            case 39: case 68: self.turnRight     = true;  break;
+            case 82:          self.moveUp        = true;  break;
+            case 70:          self.moveDown      = true;  break;
+            case 81:          self.freeze = !self.freeze; break;
+            case 13: case 69: self.toggleCar();           break;
         }
-        
     };
-    
+
     this.onKeyUp = function ( event ) {
-
         switch( event.keyCode ) {
-
-            case 38: /*up*/
-            case 87: /*W*/
-                this.moveForward = false;
-                break;
-
-            case 37: /*left*/
-            case 65: /*A*/
-                this.turnLeft = false;
-                break;
-
-            case 40: /*down*/
-            case 83: /*S*/
-                this.moveBackward = false;
-                break;
-
-            case 39: /*right*/
-            case 68: /*D*/
-                this.turnRight = false;
-                break;
-
-            case 82: /*R*/
-                this.moveUp = false;
-                break;
-            case 70: /*F*/
-                this.moveDown = false;
-                break;
-
+            case 38: case 87: self.moveForward  = false; break;
+            case 37: case 65: self.turnLeft     = false; break;
+            case 40: case 83: self.moveBackward = false; break;
+            case 39: case 68: self.turnRight    = false; break;
+            case 82:          self.moveUp       = false; break;
+            case 70:          self.moveDown     = false; break;
         }
-
     };
-    
-    
-    this.domElement.addEventListener( 'keydown', bind( this, this.onKeyDown ), false );
-    this.domElement.addEventListener( 'keyup', bind( this, this.onKeyUp ), false );
-    
-    
+
+    this.domElement.addEventListener( 'keydown', this.onKeyDown, false );
+    this.domElement.addEventListener( 'keyup',   this.onKeyUp,   false );
+
+    var canvas = document.querySelector('canvas');
+    if (canvas) {
+        canvas.setAttribute('tabindex','0');
+        canvas.addEventListener('touchstart', function(){canvas.focus();}, {once:true, passive:true});
+    }
 };
 
+GTA.Player.prototype.toggleCar = function () {
+    if (this.inCar) {
+        this.exitCar();
+    } else {
+        this.enterNearestCar();
+    }
+};
 
-function bind( scope, fn ) {
+GTA.Player.prototype.enterNearestCar = function () {
+    var cars = GTA.allCars;
+    if (!cars || cars.length === 0) return;
 
-    return function () {
+    var nearest   = null;
+    var nearestDist = 250;
+    var px = this.position.x;
+    var py = this.position.y;
 
-        fn.apply( scope, arguments );
+    for (var i = 0; i < cars.length; i++) {
+        var c = cars[i];
+        if (!c || !c.sprite) continue;
 
-    };
+        var cx = c.sprite.position.x;
+        var cy = c.sprite.position.y;
 
+        var dx = cx - px;
+        var dy = cy - py;
+        var dist = Math.sqrt(dx*dx + dy*dy);
+
+        if (dist < nearestDist) {
+            nearestDist = dist;
+            nearest = c;
+        }
+    }
+
+    if (nearest) {
+        this.inCar = true;
+        this.currentCar = nearest;
+
+        this.physics.SetLinearVelocity(
+            new Box2D.Common.Math.b2Vec2(0, 0)
+        );
+
+        if (this.sprite) this.sprite.visible = false;
+
+        GTA.Log('Entrou no carro tipo ' + nearest.type + ' dist=' + Math.round(nearestDist));
+    } else {
+        GTA.Log('Nenhum carro proximo (range=' + nearestDist + ')');
+    }
+};
+
+GTA.Player.prototype.exitCar = function () {
+    if (!this.inCar || !this.currentCar) return;
+
+    if (this.currentCar.physics) {
+        this.currentCar.physics.SetLinearVelocity(
+            new Box2D.Common.Math.b2Vec2(0, 0)
+        );
+
+        var carPos = this.currentCar.physics.GetPosition();
+        this.physics.SetPosition(
+            new Box2D.Common.Math.b2Vec2(carPos.x + 2, carPos.y + 2)
+        );
+    }
+
+    this.inCar = false;
+    this.currentCar = null;
+
+    if (this.sprite) this.sprite.visible = true;
+
+    GTA.Log('Saiu do carro');
+};
+
+GTA.Player.prototype.updateDriving = function ( delta ) {
+    var car       = this.currentCar;
+    var carPhys   = car.physics;
+    var angle     = carPhys.GetAngle();
+    var carSpeed  = 12;
+    var accel     = 4;
+    var turnSpeed = 0.055;
+
+    var vel = carPhys.GetLinearVelocity();
+    var curSpeed = Math.sqrt(vel.x*vel.x + vel.y*vel.y);
+
+    if (this.moveForward && curSpeed < carSpeed) {
+        carPhys.ApplyForce(
+            new Box2D.Common.Math.b2Vec2(
+                Math.cos(angle) * accel,
+                Math.sin(angle) * accel
+            ),
+            carPhys.GetPosition()
+        );
+    }
+
+    if (this.moveBackward) {
+        carPhys.ApplyForce(
+            new Box2D.Common.Math.b2Vec2(
+                -Math.cos(angle) * accel * 0.5,
+                -Math.sin(angle) * accel * 0.5
+            ),
+            carPhys.GetPosition()
+        );
+    }
+
+    if (!this.moveForward && !this.moveBackward) {
+        carPhys.SetLinearVelocity(
+            new Box2D.Common.Math.b2Vec2(vel.x * 0.92, vel.y * 0.92)
+        );
+    }
+
+    if (this.turnLeft)  carPhys.SetAngle(angle - turnSpeed);
+    if (this.turnRight) carPhys.SetAngle(angle + turnSpeed);
+
+    var pos = carPhys.GetPosition();
+    this.position.x =  pos.x * GTA.PhysicsScale;
+    this.position.y = -pos.y * GTA.PhysicsScale;
 };
 
 GTA.Player.prototype = GTA.Pedestrian.prototype;
 GTA.Player.prototype.constructor = GTA.Player;
 
+GTA.Player.prototype.update = function ( delta ) {
+    if (!this._isPlayer) {
+        _pedOrigUpdate.call(this, delta);
+        return;
+    }
+
+    if (this.inCar && this.currentCar && this.currentCar.physics) {
+        this.updateDriving(delta);
+        return;
+    }
+
+    _pedOrigUpdate.call(this, delta);
+};
+
+function bind( scope, fn ) {
+    return function () { fn.apply( scope, arguments ); };
+}
