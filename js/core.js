@@ -72,6 +72,7 @@ GTA.Game = function ( ) {
 
         var i, car;
 
+        // ── Carros originais ──────────────────────────────────
         car = new GTA.GameObjectPosition();  
         car.addCar(this, 58, 328, 193, 255, 400 );
         car.initPhysics( this );
@@ -90,6 +91,8 @@ GTA.Game = function ( ) {
         this.map.addObject( car );
         this.activeObjects.push( car );
 
+        // ── Carros adicionais espalhados por Liberty City ──────
+        // [type, x, y, z, angle]
         var extraCars = [
             [0,  170, 165, 255, 200],
             [1,  205, 178, 255, 512],
@@ -128,10 +131,12 @@ GTA.Game = function ( ) {
             }
         }.bind(this));
 
+        // Adiciona os 3 originais também ao allCars
         GTA.allCars.push(this.activeObjects[0]);
         GTA.allCars.push(this.activeObjects[1]);
         GTA.allCars.push(this.activeObjects[2]);
 
+        // ── Pedestres IA ─────────────────────────────────────
         if (typeof GTA.spawnAIPedestrians === 'function') {
             GTA.spawnAIPedestrians(this);
         }
@@ -171,26 +176,28 @@ GTA.Game = function ( ) {
     methods = {
         animate: function() {
             requestAnimationFrame( methods.animate );
-            
+
+            var delta = clock.getDelta(); // Uma chamada por frame
+
             _.physics.updateWorld(_, GTA.getBlock(_.player.position.x, _.player.position.y, 2));
-            
+
             _.physics.world.Step( 1/60, 10, 10 );
             _.physics.world.DrawDebugData();
             _.physics.world.ClearForces();
 
+            // Atualiza pedestres IA
             if (GTA.aiPedestrians && GTA.aiPedestrians.length > 0) {
-                var delta = clock.getDelta();
                 GTA.aiPedestrians.forEach(function(ped) {
                     if (ped && typeof ped.updateAI === 'function') {
                         ped.updateAI(delta);
                     }
                 });
             }
-            
-            methods.render.call(_);
+
+            methods.render.call(_, delta);
         },
-        render: function() {
-            this.player.update( clock.getDelta() );
+        render: function(delta) {
+            this.player.update( delta );
             
             this.camera.position.x = this.player.position.x;
             this.camera.position.y = this.player.position.y;
@@ -241,5 +248,7 @@ GTA.SectionSize = 16;
 GTA.Blocks = [];
 GTA.Base = [];
 
+// Lista global de carros para o sistema de entrar no carro
 GTA.allCars = [];
+// Lista global de pedestres IA
 GTA.aiPedestrians = [];
