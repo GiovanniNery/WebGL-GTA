@@ -2,111 +2,19 @@
 <html>
     <!--
     * @author Niklas von Hertzen <niklas at hertzen.com>
-    * @created 30.12.2011 
+    * @created 30.12.2011
     * @website http://hertzen.com
     -->
     <head>
         <title>GTA in WebGL</title>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
         <script src="external/ThreeDebug.js"></script>
         <script src="external/Stats.js"></script>
         <script src="external/Box2dWeb-2.1.a.3.js"></script>
         <script src="external/raw-loader.js"></script>
-        
-        <script src="external/DataView.js"></script>
 
-        <script src="js/reader.js"></script>
-        <script src="js/core.js"></script>
-        <script src="js/debug.js"></script>
-        <script src="js/physics.js"></script>
-        <script src="js/map.js"></script>
-        <script src="js/worker.js"></script>
-        <script src="js/filesystem.js"></script>
-        <script src="js/loader.js"></script>
-        <script src="js/block.js"></script>
-        <script src="js/car.js"></script>
-        <script src="js/sprites.js"></script>
-        <script src="js/gameobject.js"></script>
-        <script src="js/person.js"></script>
-        <script src="js/player.js"></script>
-        <script src="js/missions.js"></script>
-        <script src="js/missioncommands.js"></script>
-        <script src="js/missionactions.js"></script>
-        <script src="js/ai.js"></script>
-
-
-        <script>
-            function start(){
-                
-                var stats = new Stats();
-
-                // Align top-left
-                stats.domElement.style.position = 'absolute';
-                stats.domElement.style.left = '0px';
-                stats.domElement.style.top = '0px';
-
-                document.body.appendChild( stats.domElement );
-
-                setInterval( function () {
-
-                    stats.update();
-
-                }, 1000 / 60 );
-                
-                
-                var game = new GTA.Game();
-            }
-            
-        </script>
-        <style>
-            body, html {
-                overflow:hidden;
-                margin:0;
-                padding:0;
-                background:#000;
-            }
-
-            #GTADebugPositionData {
-
-
-
-
-                position: absolute;
-                right: 0px;
-                top: 0px;
-                width: 200px;
-                height: 50px;
-                opacity: 0.5;
-                color: #fff;
-                background: #000;
-
-            }
-
-        </style>
-    </head>
-    <body onload="start();">
-    <script src="js/ai.js"></script>
-    </body>
-<script>
-(function(){
-var s=document.createElement('style');
-s.textContent='canvas{position:fixed!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;width:auto!important;height:100vh!important;max-width:100vw!important}#mc{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;pointer-events:none}#jbase{position:absolute;left:20px;bottom:20px;width:120px;height:120px;border-radius:50%;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.35);pointer-events:all}#jthumb{position:absolute;top:50%;left:50%;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.75);transform:translate(-50%,-50%);pointer-events:none;transition:transform .05s}#ab{position:absolute;right:20px;bottom:20px;display:flex;flex-direction:column;gap:14px;pointer-events:all}.ab{width:68px;height:68px;border-radius:50%;background:rgba(200,20,20,.7);border:2px solid rgba(255,100,100,.5);color:#fff;font-family:monospace;font-size:9px;font-weight:bold;line-height:1.3;display:flex;align-items:center;justify-content:center;text-align:center;user-select:none}.ab:active{background:rgba(255,200,0,.8)}#ab2{background:rgba(20,20,200,.7);border-color:rgba(100,100,255,.5)}';
-<html>
-    <!--
-    * @author Niklas von Hertzen <niklas at hertzen.com>
-    * @created 30.12.2011 
-    * @website http://hertzen.com
-    -->
-    <head>
-        <title>GTA in WebGL</title>
-        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
-        <script src="external/ThreeDebug.js"></script>
-        <script src="external/Stats.js"></script>
-        <script src="external/Box2dWeb-2.1.a.3.js"></script>
-        <script src="external/raw-loader.js"></script>
-        
         <script src="external/DataView.js"></script>
 
         <script src="js/reader.js"></script>
@@ -130,7 +38,7 @@ s.textContent='canvas{position:fixed!important;top:50%!important;left:50%!import
 
         <script>
             function start(){
-                
+
                 var stats = new Stats();
 
                 // Align top-left
@@ -145,11 +53,11 @@ s.textContent='canvas{position:fixed!important;top:50%!important;left:50%!import
                     stats.update();
 
                 }, 1000 / 60 );
-                
-                
-                var game = new GTA.Game();
+
+                // Exposto globalmente para controle direto pelo joystick mobile
+                window._gtaGame = new GTA.Game();
             }
-            
+
         </script>
         <style>
             body, html {
@@ -160,10 +68,6 @@ s.textContent='canvas{position:fixed!important;top:50%!important;left:50%!import
             }
 
             #GTADebugPositionData {
-
-
-
-
                 position: absolute;
                 right: 0px;
                 top: 0px;
@@ -172,35 +76,77 @@ s.textContent='canvas{position:fixed!important;top:50%!important;left:50%!import
                 opacity: 0.5;
                 color: #fff;
                 background: #000;
-
             }
 
+            /* Aviso de rotação em portrait */
+            #_rotMsg {
+                display: none;
+                position: fixed;
+                top: 0; left: 0;
+                width: 100%; height: 100%;
+                background: #000;
+                z-index: 9999999;
+                align-items: center;
+                justify-content: center;
+                color: #fff;
+                font-size: 22px;
+                text-align: center;
+                font-family: sans-serif;
+                flex-direction: column;
+                gap: 16px;
+            }
+            @media (orientation: portrait) {
+                #_rotMsg { display: flex !important; }
+                canvas, #mc { display: none !important; }
+            }
         </style>
     </head>
     <body onload="start();">
-    <script src="js/ai.js"></script>
-    </body>
+
+<!-- Aviso de rotação -->
+<div id="_rotMsg">
+    <div style="font-size:48px">&#8635;</div>
+    <div>Gire o dispositivo<br>para jogar na horizontal</div>
+</div>
+
+</body>
+<script src="js/ai.js"></script>
 <script>
 (function(){
 var s=document.createElement('style');
 s.textContent='canvas{position:fixed!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;width:auto!important;height:100vh!important;max-width:100vw!important}#mc{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;pointer-events:none}#jbase{position:absolute;left:20px;bottom:20px;width:120px;height:120px;border-radius:50%;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.35);pointer-events:all}#jthumb{position:absolute;top:50%;left:50%;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.75);transform:translate(-50%,-50%);pointer-events:none;transition:transform .05s}#ab{position:absolute;right:20px;bottom:20px;display:flex;flex-direction:column;gap:14px;pointer-events:all}.ab{width:68px;height:68px;border-radius:50%;background:rgba(200,20,20,.7);border:2px solid rgba(255,100,100,.5);color:#fff;font-family:monospace;font-size:9px;font-weight:bold;line-height:1.3;display:flex;align-items:center;justify-content:center;text-align:center;user-select:none}.ab:active{background:rgba(255,200,0,.8)}#ab2{background:rgba(20,20,200,.7);border-color:rgba(100,100,255,.5)}';
 document.head.appendChild(s);
-document.body.insertAdjacentHTML('beforeend','<div id="mc"><div id="jbase"><div id="jthumb"></div></div><div id="ab"><div class="ab" id="ab1">ENTRAR<br>CARRO</div><div class="ab" id="ab2">A\u00C7\u00C3O</div></div></div>');
+document.body.insertAdjacentHTML('beforeend','<div id="mc"><div id="jbase"><div id="jthumb"></div></div><div id="ab"><div class="ab" id="ab1">ENTRAR<br>CARRO</div><div class="ab" id="ab2">AÇÃO</div></div></div>');
 
-var pressed={},jActive=false,jBX=0,jBY=0,JR=54;
-function fire(t,key,kc){var e=new KeyboardEvent(t,{key:key,code:key,keyCode:kc,which:kc,bubbles:true,cancelable:true});window.dispatchEvent(e);document.dispatchEvent(e);}
-function setKey(key,kc,on){if(on&&!pressed[key]){fire('keydown',key,kc);pressed[key]=true;}else if(!on&&pressed[key]){fire('keyup',key,kc);pressed[key]=false;}}
-function releaseAll(){setKey('ArrowUp',38,false);setKey('ArrowDown',40,false);setKey('ArrowLeft',37,false);setKey('ArrowRight',39,false);}
+// Solicita orientação landscape
+if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(function(){});
+}
 
+// Helpers para acessar o player diretamente (mais confiável que KeyboardEvent em mobile)
+function getPlayer() {
+    return window._gtaGame && window._gtaGame.player;
+}
+function setMove(flag, on) {
+    var p = getPlayer();
+    if (!p) return;
+    p[flag] = on;
+}
+function releaseAll() {
+    ['moveForward','moveBackward','turnLeft','turnRight'].forEach(function(f){
+        setMove(f, false);
+    });
+}
+
+var jActive=false,jBX=0,jBY=0,JR=54;
 var jbase=document.getElementById('jbase');
 var thumb=document.getElementById('jthumb');
-var br=jbase.getBoundingClientRect();
 
 jbase.addEventListener('touchstart',function(e){
   e.preventDefault();
   jActive=true;
   var t=e.touches[0];
-  br=jbase.getBoundingClientRect();
+  var br=jbase.getBoundingClientRect();
   jBX=br.left+br.width/2;jBY=br.top+br.height/2;
   updateJoy(t.clientX,t.clientY);
 },{passive:false});
@@ -224,18 +170,24 @@ function updateJoy(cx,cy){
   if(dist>JR){dx=dx/dist*JR;dy=dy/dist*JR;}
   thumb.style.transform='translate(calc(-50% + '+Math.round(dx)+'px),calc(-50% + '+Math.round(dy)+'px))';
   var th=JR*0.3;
-  setKey('ArrowUp',38,dy<-th);
-  setKey('ArrowDown',40,dy>th);
-  setKey('ArrowLeft',37,dx<-th);
-  setKey('ArrowRight',39,dx>th);
+  setMove('moveForward',  dy < -th);
+  setMove('moveBackward', dy >  th);
+  setMove('turnLeft',     dx < -th);
+  setMove('turnRight',    dx >  th);
 }
 
-['ab1','ab2'].forEach(function(id,i){
-  var el=document.getElementById(id);
-  var key=i===0?'Enter':' ',kc=i===0?13:32;
-  el.addEventListener('touchstart',function(e){e.preventDefault();fire('keydown',key,kc);},{passive:false});
-  el.addEventListener('touchend',function(e){e.preventDefault();fire('keyup',key,kc);},{passive:false});
-});
+// Botão ENTRAR CARRO
+document.getElementById('ab1').addEventListener('touchstart',function(e){
+  e.preventDefault();
+  var p = getPlayer();
+  if (p && typeof p.toggleCar === 'function') p.toggleCar();
+},{passive:false});
+document.getElementById('ab1').addEventListener('touchend',function(e){e.preventDefault();},{passive:false});
+
+// Botão AÇÃO (reservado)
+document.getElementById('ab2').addEventListener('touchstart',function(e){e.preventDefault();},{passive:false});
+document.getElementById('ab2').addEventListener('touchend',function(e){e.preventDefault();},{passive:false});
+
 document.addEventListener('touchmove',function(e){e.preventDefault();},{passive:false});
 })();
 </script>
