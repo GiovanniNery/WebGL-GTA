@@ -72,43 +72,41 @@ GTA.Game = function ( ) {
 
         var i, car;
 
-        // ── Carros originais ──────────────────────────────────
-        car = new GTA.GameObjectPosition();  
-        car.addCar(this, 58, 328, 193, 255, 400 );
-        car.initPhysics( this );
-        this.map.addObject( car );
-        this.activeObjects.push( car );
-        
-        car = new GTA.GameObjectPosition();  
-        car.addCar(this, 4, 242, 225, 255, 764 );
-        car.initPhysics( this );
-        this.map.addObject( car );
-        this.activeObjects.push( car );
-        
-        car = new GTA.GameObjectPosition();  
-        car.addCar(this, 44, 281, 297, 255, 300 );
+        // Player nasce em Three.js (6720, -7616) = loader.js block (105,119)
+        // Car initPhysics: physX=(carX-32)/10, physY=(carY-20)/10
+        // Three.js sprite: x=physX*10=carX-32, y=-physY*10=-(carY-20)
+        // Para Three.js(6720,-7616): carX=6752, carY=7636
+        car = new GTA.GameObjectPosition();
+        car.addCar(this, 58, 6752, 7636, 255, 400 );
         car.initPhysics( this );
         this.map.addObject( car );
         this.activeObjects.push( car );
 
-        // ── Carros adicionais espalhados por Liberty City ──────
-        // Usa tipos válidos do jogo (4, 44, 58) e posições nas ruas
-        // [type, x, y, z, angle]
+        car = new GTA.GameObjectPosition();
+        car.addCar(this, 4, 6880, 7572, 255, 764 );
+        car.initPhysics( this );
+        this.map.addObject( car );
+        this.activeObjects.push( car );
+
+        car = new GTA.GameObjectPosition();
+        car.addCar(this, 44, 6688, 7828, 255, 300 );
+        car.initPhysics( this );
+        this.map.addObject( car );
+        this.activeObjects.push( car );
+
+        // [type, x, y, z, angle] Three.js: x=X-32, y=-(Y-20)
         var extraCars = [
-            // Rua horizontal y≈200
-            [58, 252, 198, 255,   0],
-            [4,  295, 202, 255, 128],
-            [44, 355, 197, 255,  64],
-            [58, 388, 208, 255, 192],
-            // Rua horizontal y≈250
-            [4,  218, 249, 255,   0],
-            [44, 265, 252, 255, 128],
-            [58, 315, 251, 255,  64],
-            [4,  362, 248, 255, 192],
-            // Rua horizontal y≈300
-            [44, 238, 302, 255, 128],
-            [58, 305, 299, 255,   0],
-            [4,  370, 305, 255,  64],
+            [58, 6816, 7604, 255,   0],
+            [4,  6944, 7556, 255, 128],
+            [44, 6624, 7668, 255,  64],
+            [58, 6768, 7700, 255, 192],
+            [4,  6848, 7764, 255,   0],
+            [44, 6672, 7796, 255, 128],
+            [58, 6912, 7828, 255,  64],
+            [4,  6752, 7860, 255, 192],
+            [44, 6624, 7540, 255, 128],
+            [58, 6976, 7668, 255,   0],
+            [4,  6848, 7892, 255,  64],
         ];
 
         extraCars.forEach(function(d) {
@@ -124,12 +122,10 @@ GTA.Game = function ( ) {
             }
         }.bind(this));
 
-        // Adiciona os 3 originais também ao allCars
         GTA.allCars.push(this.activeObjects[0]);
         GTA.allCars.push(this.activeObjects[1]);
         GTA.allCars.push(this.activeObjects[2]);
 
-        // ── Pedestres IA ─────────────────────────────────────
         if (typeof GTA.spawnAIPedestrians === 'function') {
             GTA.spawnAIPedestrians(this);
         }
@@ -139,12 +135,16 @@ GTA.Game = function ( ) {
             Math.round((-(this.camera.position.y / 64)) / GTA.SectionSize)
         ];
         
-        this.scene.add( this.map.sections [ 0 ][ 0 ] );
-        this.scene.add( this.map.sections [ 0 ][ 1 ] );
-        this.scene.add( this.map.sections [ 1 ][ 1 ] );
-        this.scene.add( this.map.sections [ 1 ][ 2 ] );
+        // Player em block(105,119) section y=7, x=6
+        // sections[y_sec][x_sec] conforme map.addObject
+        var addSec = function(s, y, x) {
+            if (s[y] && s[y][x]) scene.add(s[y][x]);
+        };
+        var scene = this.scene, secs = this.map.sections;
+        addSec(secs, 6, 5); addSec(secs, 6, 6); addSec(secs, 6, 7);
+        addSec(secs, 7, 5); addSec(secs, 7, 6); addSec(secs, 7, 7);
+        addSec(secs, 8, 5); addSec(secs, 8, 6); addSec(secs, 8, 7);
 
-        // Esconde tela de carregamento
         var loadEl = document.getElementById('_loading');
         if (loadEl) loadEl.style.display = 'none';
 
@@ -175,7 +175,7 @@ GTA.Game = function ( ) {
         animate: function() {
             requestAnimationFrame( methods.animate );
 
-            var delta = clock.getDelta(); // Uma chamada por frame
+            var delta = clock.getDelta();
 
             _.physics.updateWorld(_, GTA.getBlock(_.player.position.x, _.player.position.y, 2));
 
@@ -183,7 +183,6 @@ GTA.Game = function ( ) {
             _.physics.world.DrawDebugData();
             _.physics.world.ClearForces();
 
-            // Atualiza pedestres IA
             if (GTA.aiPedestrians && GTA.aiPedestrians.length > 0) {
                 GTA.aiPedestrians.forEach(function(ped) {
                     if (ped && typeof ped.updateAI === 'function') {
@@ -246,7 +245,5 @@ GTA.SectionSize = 16;
 GTA.Blocks = [];
 GTA.Base = [];
 
-// Lista global de carros para o sistema de entrar no carro
 GTA.allCars = [];
-// Lista global de pedestres IA
 GTA.aiPedestrians = [];
