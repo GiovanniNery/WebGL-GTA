@@ -173,15 +173,15 @@ GTA.Player.prototype.updateDriving = function ( delta ) {
     if (this.moveForward) {
         carPhys.SetLinearVelocity(
             new Box2D.Common.Math.b2Vec2(
-                Math.cos(angle) * carSpeed,
-                Math.sin(angle) * carSpeed
+                 Math.sin(angle) * carSpeed,
+                -Math.cos(angle) * carSpeed
             )
         );
     } else if (this.moveBackward) {
         carPhys.SetLinearVelocity(
             new Box2D.Common.Math.b2Vec2(
-                -Math.cos(angle) * carSpeed * 0.5,
-                -Math.sin(angle) * carSpeed * 0.5
+                -Math.sin(angle) * carSpeed * 0.5,
+                 Math.cos(angle) * carSpeed * 0.5
             )
         );
     } else {
