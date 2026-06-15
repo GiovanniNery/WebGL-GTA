@@ -366,57 +366,83 @@ var GTA_pickups = [];
 
 // Posicoes no mundo â player nasce em Three.js (6720,-7616)
 // Pickups sao posicionados diretamente no espaco Three.js
-var GTA_PICKUP_POS = [
-    {x: 6680, y: -7580},   // calcada norte
-    {x: 6800, y: -7680},   // calcada leste
-    {x: 6620, y: -7760},   // calcada sul-oeste
+// Pistola .38 = wireframe CIANO (weapon 1), Metralhadora = wireframe AMARELO (weapon 2)
+var GTA_pickups = [];
+
+// 8 posicoes de pistola .38 nas calcadas (player nasce em Three.js 6720,-7616)
+var GTA_PICKUP_38_POS = [
+    {x: 6665, y: -7565},
+    {x: 6720, y: -7550},
+    {x: 6775, y: -7570},
+    {x: 6640, y: -7620},
+    {x: 6800, y: -7620},
+    {x: 6650, y: -7700},
+    {x: 6720, y: -7745},
+    {x: 6790, y: -7695},
+];
+
+// 8 posicoes de metralhadora nas calcadas (mais afastadas)
+var GTA_PICKUP_MG_POS = [
+    {x: 6680, y: -7580},
+    {x: 6800, y: -7680},
+    {x: 6620, y: -7760},
+    {x: 6850, y: -7620},
+    {x: 6600, y: -7600},
+    {x: 6760, y: -7730},
+    {x: 6830, y: -7710},
+    {x: 6680, y: -7800},
 ];
 
 function criarPickups(game) {
     if (!game || !game.scene) return;
     GTA_pickups = [];
-    // Suporte a versoes antigas do Three.js (CubeGeometry) e novas (BoxGeometry)
     var GeomClass = (typeof THREE !== 'undefined') && (THREE.BoxGeometry || THREE.CubeGeometry);
     if (!GeomClass) return;
-    GTA_PICKUP_POS.forEach(function(pos) {
+    GTA_PICKUP_38_POS.forEach(function(pos) {
         try {
-            var geom = new GeomClass(8, 8, 8);
+            var geom = new GeomClass(7, 7, 7);
+            var mat  = new THREE.MeshBasicMaterial({ color: 0x00ccff, wireframe: true });
+            var mesh = new THREE.Mesh(geom, mat);
+            mesh.position.set(pos.x, pos.y, 15);
+            game.scene.add(mesh);
+            GTA_pickups.push({ mesh: mesh, pos: pos, ativa: true, tipo: 1 });
+        } catch(e) {}
+    });
+    GTA_PICKUP_MG_POS.forEach(function(pos) {
+        try {
+            var geom = new GeomClass(9, 9, 9);
             var mat  = new THREE.MeshBasicMaterial({ color: 0xffcc00, wireframe: true });
             var mesh = new THREE.Mesh(geom, mat);
             mesh.position.set(pos.x, pos.y, 15);
             game.scene.add(mesh);
-            GTA_pickups.push({ mesh: mesh, pos: pos, ativa: true });
-        } catch(e) { GTA.Log('Pickup error: ' + e.message); }
+            GTA_pickups.push({ mesh: mesh, pos: pos, ativa: true, tipo: 2 });
+        } catch(e) {}
     });
 }
 
 function loopPickups() {
-    var p   = getPlayer();
-    var t   = Date.now() * 0.003;
+    var p = getPlayer();
+    var t = Date.now() * 0.003;
     GTA_pickups.forEach(function(pk) {
         if (!pk.ativa) return;
-        // Animacao de rotacao e bobbing
         pk.mesh.rotation.x += 0.04;
         pk.mesh.rotation.z += 0.03;
-        pk.mesh.position.z  = 8 + Math.sin(t) * 3;
-
+        pk.mesh.position.z  = 8 + Math.sin(t + pk.pos.x * 0.01) * 3;
         if (!p) return;
-        var dx   = p.position.x - pk.pos.x;
-        var dy   = p.position.y - pk.pos.y;
-        var dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < 18) {
-            // Coletou metralhadora!
+        var dx = p.position.x - pk.pos.x;
+        var dy = p.position.y - pk.pos.y;
+        if (Math.sqrt(dx*dx + dy*dy) < 18) {
             pk.ativa = false;
             if (window._gtaGame) window._gtaGame.scene.remove(pk.mesh);
-            p.weapon = 2; // metralhadora
-            mostrarNotificacao('METRALHADORA OBTIDA!');
+            p.weapon = pk.tipo;
+            mostrarNotificacao(pk.tipo === 2 ? 'METRALHADORA OBTIDA!' : 'PISTOLA .38 OBTIDA!');
             atualizarHUD();
         }
     });
     requestAnimationFrame(loopPickups);
 }
 
-/* ââ Botao JOGAR ââââââââââââââââââââââââââââââââââââââââââââââ */
+
 function iniciarJogo() {
     document.getElementById('_menu').style.display = 'none';
     document.getElementById('mc').style.display    = 'block';
