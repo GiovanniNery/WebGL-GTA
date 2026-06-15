@@ -6,7 +6,7 @@
     * @website http://hertzen.com
     -->
     <head>
-        <title>GTA in WebGL</title>
+        <title>ATG1</title>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
@@ -78,7 +78,7 @@
                 background: #000;
             }
 
-            /* Aviso de rotação em portrait */
+            /* Aviso de rotacao em portrait */
             #_rotMsg {
                 display: none;
                 position: fixed;
@@ -101,9 +101,19 @@
             }
         </style>
     </head>
-    <body onload="start();">
+    <body>
 
-<!-- Aviso de rotação -->
+<!-- Menu de inicio -->
+<div id="_menu" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px;">
+    <div style="color:#cc0000;font-family:'Courier New',monospace;font-size:72px;font-weight:900;letter-spacing:8px;text-shadow:3px 3px 0 #440000,0 0 60px #ff0000;">ATG1</div>
+    <div style="color:#555;font-family:'Courier New',monospace;font-size:10px;text-align:center;line-height:2.2;letter-spacing:2px;">
+        JOYSTICK ESQUERDO &mdash; MOVER / GIRAR<br>
+        ENTRAR CARRO &mdash; ENTRAR / SAIR DO VEICULO
+    </div>
+    <button id="_playBtn" style="margin-top:12px;padding:16px 56px;background:#cc0000;color:#fff;border:2px solid #ff4444;border-radius:0;font-size:15px;font-family:'Courier New',monospace;font-weight:bold;cursor:pointer;letter-spacing:4px;text-transform:uppercase;">JOGAR</button>
+</div>
+
+<!-- Aviso de rotacao -->
 <div id="_rotMsg">
     <div style="font-size:48px">&#8635;</div>
     <div>Gire o dispositivo<br>para jogar na horizontal</div>
@@ -111,7 +121,7 @@
 
 <!-- Loading screen -->
 <div id="_loading" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:99997;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
-    <div style="color:#fff;font-family:sans-serif;font-size:20px;font-weight:bold;">GTA WebGL</div>
+    <div style="color:#cc0000;font-family:'Courier New',monospace;font-size:28px;font-weight:900;letter-spacing:6px;">ATG1</div>
     <div style="color:#aaa;font-family:sans-serif;font-size:14px;">Carregando...</div>
     <div style="width:120px;height:4px;background:#333;border-radius:2px;overflow:hidden;">
         <div id="_loadBar" style="height:100%;width:0%;background:#e55;border-radius:2px;animation:ldpulse 1.5s ease-in-out infinite;"></div>
@@ -126,14 +136,25 @@
 var s=document.createElement('style');
 s.textContent='canvas{position:fixed!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;width:auto!important;height:100vh!important;max-width:100vw!important}#mc{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;pointer-events:none}#jbase{position:absolute;left:20px;bottom:20px;width:120px;height:120px;border-radius:50%;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.35);pointer-events:all}#jthumb{position:absolute;top:50%;left:50%;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.75);transform:translate(-50%,-50%);pointer-events:none;transition:transform .05s}#ab{position:absolute;right:20px;bottom:20px;display:flex;flex-direction:column;gap:14px;pointer-events:all}.ab{width:68px;height:68px;border-radius:50%;background:rgba(200,20,20,.7);border:2px solid rgba(255,100,100,.5);color:#fff;font-family:monospace;font-size:9px;font-weight:bold;line-height:1.3;display:flex;align-items:center;justify-content:center;text-align:center;user-select:none}.ab:active{background:rgba(255,200,0,.8)}#ab2{background:rgba(20,20,200,.7);border-color:rgba(100,100,255,.5)}';
 document.head.appendChild(s);
-document.body.insertAdjacentHTML('beforeend','<div id="mc"><div id="jbase"><div id="jthumb"></div></div><div id="ab"><div class="ab" id="ab1">ENTRAR<br>CARRO</div><div class="ab" id="ab2">AÇÃO</div></div></div>');
+document.body.insertAdjacentHTML('beforeend','<div id="mc"><div id="jbase"><div id="jthumb"></div></div><div id="ab"><div class="ab" id="ab1">ENTRAR<br>CARRO</div><div class="ab" id="ab2">ACAO</div></div></div>');
 
-// Solicita orientação landscape
+// Botao JOGAR - inicia o jogo ao pressionar
+document.getElementById('_playBtn').addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    document.getElementById('_menu').style.display = 'none';
+    start();
+}, {passive: false});
+document.getElementById('_playBtn').addEventListener('click', function() {
+    document.getElementById('_menu').style.display = 'none';
+    start();
+});
+
+// Solicita orientacao landscape
 if (screen.orientation && screen.orientation.lock) {
     screen.orientation.lock('landscape').catch(function(){});
 }
 
-// Helpers para acessar o player diretamente (mais confiável que KeyboardEvent em mobile)
+// Helpers para acessar o player diretamente
 function getPlayer() {
     return window._gtaGame && window._gtaGame.player;
 }
@@ -186,7 +207,7 @@ function updateJoy(cx,cy){
   setMove('turnRight',    dx >  th);
 }
 
-// Botão ENTRAR CARRO
+// Botao ENTRAR CARRO
 document.getElementById('ab1').addEventListener('touchstart',function(e){
   e.preventDefault();
   var p = getPlayer();
@@ -194,7 +215,7 @@ document.getElementById('ab1').addEventListener('touchstart',function(e){
 },{passive:false});
 document.getElementById('ab1').addEventListener('touchend',function(e){e.preventDefault();},{passive:false});
 
-// Botão AÇÃO (reservado)
+// Botao ACAO (reservado)
 document.getElementById('ab2').addEventListener('touchstart',function(e){e.preventDefault();},{passive:false});
 document.getElementById('ab2').addEventListener('touchend',function(e){e.preventDefault();},{passive:false});
 
