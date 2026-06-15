@@ -7,11 +7,11 @@
 // Captura update original ANTES de sobrescrever (person.js ja rodou)
 var _pedOrigUpdate = GTA.Pedestrian.prototype.update;
 
-// Velocidade por tipo de carro (tipo conforme addCar em core.js)
+// Velocidade por tipo de carro
 var GTA_CAR_SPEEDS = {
-    4:  12,   // esportivo
-    44: 10,   // medio
-    58:  8,   // normal
+    4:  25,   // esportivo / policia
+    44: 20,   // medio
+    58: 16,   // normal
 };
 
 GTA.Player = function ( game, x, y, z ) {
@@ -33,7 +33,7 @@ GTA.Player = function ( game, x, y, z ) {
 
     this.speed         = 700;
     this.rotationSpeed = 0.1;
-    this.weapon        = 0;    // 0 = pistola, 1 = metralhadora
+    this.weapon        = 0;
     this.lastframe     = 0;
     this.runningFrames = [];
     this.spriteframe   = 0;
@@ -85,7 +85,6 @@ GTA.Player = function ( game, x, y, z ) {
 GTA.Player.prototype = GTA.Pedestrian.prototype;
 GTA.Player.prototype.constructor = GTA.Player;
 
-// Entrar / sair do carro
 GTA.Player.prototype.toggleCar = function () {
     if (this.inCar) {
         this.exitCar();
@@ -148,7 +147,7 @@ GTA.Player.prototype.updateDriving = function ( delta ) {
     var car       = this.currentCar;
     var carPhys   = car.physics;
     var angle     = carPhys.GetAngle();
-    var carSpeed  = GTA_CAR_SPEEDS[car.type] || 8;
+    var carSpeed  = GTA_CAR_SPEEDS[car.type] || 16;
     var turnSpeed = 0.055;
 
     carPhys.SetAwake(true);
