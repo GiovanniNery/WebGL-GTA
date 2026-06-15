@@ -1,11 +1,18 @@
-/* 
- * @author Niklas von Hertzen <niklas at hertzen.com>
- * @created 4.1.2012
- * Enhanced: enter/exit car, drive car, AI pedestrian compat
+/*
+ * player.js
+ * @author Niklas von Hertzen / ATG1
+ * Enhanced: car driving, weapon system, pickup detection
  */
 
 // Captura update original ANTES de sobrescrever (person.js ja rodou)
 var _pedOrigUpdate = GTA.Pedestrian.prototype.update;
+
+// Velocidade por tipo de carro (tipo conforme addCar em core.js)
+var GTA_CAR_SPEEDS = {
+    4:  12,   // esportivo
+    44: 10,   // medio
+    58:  8,   // normal
+};
 
 GTA.Player = function ( game, x, y, z ) {
 
@@ -15,28 +22,26 @@ GTA.Player = function ( game, x, y, z ) {
 
     this.registerAnimations( game.spriteNumbers.offset.PED );
     this.initPhysics( game );
-    
+
     var geom = THREE.GeometryUtils.clone( game.sprites[ this.animationSprites[0][0] ].sprite.geometry );
     this.sprite = new THREE.Mesh( geom, game.sprites[ this.animationSprites[0][0] ].sprite.material );
     this.sprite.geometry.dynamic = true;
-    
+
     this.spriteAnimator = new GTA.SpriteAnimation( game, this.animationSprites[0][0], this.sprite );
     this.game = game;
     this.add( this.sprite );
-    
-    this.speed = 700;
+
+    this.speed         = 700;
     this.rotationSpeed = 0.1;
-    this.weapon = 0;
-    this.lastframe = 0;
+    this.weapon        = 0;    // 0 = pistola, 1 = metralhadora
+    this.lastframe     = 0;
     this.runningFrames = [];
-    this.spriteframe = 0;
-    
-    this._isPlayer = true;
-    
-    this.inCar = false;
-    this.currentCar = null;
-    this.handbrake = false;
-    
+    this.spriteframe   = 0;
+    this._isPlayer     = true;
+    this.inCar         = false;
+    this.currentCar    = null;
+    this.handbrake     = false;
+
     this.domElement = document;
 
     var self = this;
@@ -48,7 +53,6 @@ GTA.Player = function ( game, x, y, z ) {
             case 40: case 83: self.moveBackward  = true;  break;
             case 39: case 68: self.turnRight     = true;  break;
             case 82:          self.moveUp        = true;  break;
-            case 70:          self.moveDown      = true;  break;
             case 81:          self.freeze = !self.freeze; break;
             case 13: case 69: self.toggleCar();           break;
             case 32:          self.handbrake     = true;  break;
@@ -94,7 +98,7 @@ GTA.Player.prototype.enterNearestCar = function () {
     var cars = GTA.allCars;
     if (!cars || cars.length === 0) return;
 
-    var nearest   = null;
+    var nearest     = null;
     var nearestDist = 250;
     var px = this.position.x;
     var py = this.position.y;
@@ -116,74 +120,65 @@ GTA.Player.prototype.enterNearestCar = function () {
     if (nearest) {
         this.inCar = true;
         this.currentCar = nearest;
-        this.physics.SetLinearVelocity(
-            new Box2D.Common.Math.b2Vec2(0, 0)
-        );
+        this.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0));
         if (this.sprite) this.sprite.visible = false;
-        GTA.Log('Entrou no carro tipo ' + nearest.type + ' dist=' + Math.round(nearestDist));
-    } else {
-        GTA.Log('Nenhum carro proximo (range=' + nearestDist + ')');
+        if (typeof window.GTA_onEnterCar === 'function') window.GTA_onEnterCar(nearest);
+        GTA.Log('Entrou no carro tipo ' + nearest.type);
     }
 };
 
 GTA.Player.prototype.exitCar = function () {
     if (!this.inCar || !this.currentCar) return;
+
     if (this.currentCar.physics) {
-        this.currentCar.physics.SetLinearVelocity(
-            new Box2D.Common.Math.b2Vec2(0, 0)
-        );
+        this.currentCar.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0));
         var carPos = this.currentCar.physics.GetPosition();
-        this.physics.SetPosition(
-            new Box2D.Common.Math.b2Vec2(carPos.x + 2, carPos.y + 2)
-        );
+        this.physics.SetPosition(new Box2D.Common.Math.b2Vec2(carPos.x + 2, carPos.y + 2));
     }
+
     this.inCar = false;
     this.currentCar = null;
     if (this.sprite) this.sprite.visible = true;
+    if (typeof window.GTA_onExitCar === 'function') window.GTA_onExitCar();
     GTA.Log('Saiu do carro');
 };
 
-// Direcao do carro
+// Direcao corrigida: -sin/+cos = frente; +sin/-cos = re
 GTA.Player.prototype.updateDriving = function ( delta ) {
     var car       = this.currentCar;
     var carPhys   = car.physics;
     var angle     = carPhys.GetAngle();
-    var carSpeed  = 8;
+    var carSpeed  = GTA_CAR_SPEEDS[car.type] || 8;
     var turnSpeed = 0.055;
 
     carPhys.SetAwake(true);
 
     if (this.handbrake) {
-        var vel = carPhys.GetLinearVelocity();
+        var vel    = carPhys.GetLinearVelocity();
         var atrito = this.moveForward ? 0.97 : 0.84;
-        carPhys.SetLinearVelocity(
-            new Box2D.Common.Math.b2Vec2(vel.x * atrito, vel.y * atrito)
-        );
+        carPhys.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(vel.x * atrito, vel.y * atrito));
         if (this.turnLeft)  carPhys.SetAngle(angle - turnSpeed * 2.8);
         if (this.turnRight) carPhys.SetAngle(angle + turnSpeed * 2.8);
+
     } else if (this.moveForward) {
-        carPhys.SetLinearVelocity(
-            new Box2D.Common.Math.b2Vec2(
-                 Math.sin(angle) * carSpeed,
-                -Math.cos(angle) * carSpeed
-            )
-        );
+        carPhys.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(
+            -Math.sin(angle) * carSpeed,
+             Math.cos(angle) * carSpeed
+        ));
         if (this.turnLeft)  carPhys.SetAngle(angle - turnSpeed);
         if (this.turnRight) carPhys.SetAngle(angle + turnSpeed);
+
     } else if (this.moveBackward) {
-        carPhys.SetLinearVelocity(
-            new Box2D.Common.Math.b2Vec2(
-                -Math.sin(angle) * carSpeed * 0.5,
-                 Math.cos(angle) * carSpeed * 0.5
-            )
-        );
+        carPhys.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(
+             Math.sin(angle) * carSpeed * 0.5,
+            -Math.cos(angle) * carSpeed * 0.5
+        ));
         if (this.turnLeft)  carPhys.SetAngle(angle - turnSpeed);
         if (this.turnRight) carPhys.SetAngle(angle + turnSpeed);
+
     } else {
         var vel = carPhys.GetLinearVelocity();
-        carPhys.SetLinearVelocity(
-            new Box2D.Common.Math.b2Vec2(vel.x * 0.85, vel.y * 0.85)
-        );
+        carPhys.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(vel.x * 0.85, vel.y * 0.85));
     }
 
     var pos = carPhys.GetPosition();
