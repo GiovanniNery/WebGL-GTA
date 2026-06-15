@@ -76,15 +76,21 @@ GTA.Game = function ( ) {
         // FÃ³rmula: Three.js x = carX-32, Three.js y = -(carY-20)
         // Player nasce em Three.js (6720, -7616) â carX=6752, carY=7636
         // [tipo, carX, carY, z, angulo]
+                // -- 8 carros estrategicos perto do spawn --
+        // Player nasce em Three.js (512, -192) [GTA.Debug.startPosition=[8,3,2]]
+        // Formula: carX = Three.js_x + 32
+        //          tipo58/4 (h=64): carY = 32 - Three.js_y
+        //          tipo44  (h=124): carY = 62 - Three.js_y
+        // [tipo, carX, carY, z, angulo]
         var carData = [
-            [58,  6752,  7636,  255,  400],  // normal  â junto ao player (norte da rua)
-            [4,   6880,  7572,  255,  764],  // policia â rua norte
-            [44,  6688,  7828,  255,  300],  // medio   â rua sul-oeste
-            [58,  6816,  7700,  255,    0],  // normal  â rua leste
-            [4,   6944,  7760,  255,  128],  // policia â rua sudeste
-            [44,  6624,  7700,  255,   64],  // medio   â rua oeste
-            [58,  6752,  7860,  255,  192],  // normal  â rua sul
-            [44,  6976,  7668,  255,    0],  // medio   â rua nordeste
+            [58,  544,  224, 128,   0],  // normal  -- junto ao player
+            [4,   608,  224, 128,  64],  // policia -- leste
+            [58,  672,  224, 128, 128],  // normal  -- leste afastado
+            [44,  480,  254, 128, 192],  // medio   -- oeste
+            [4,   416,  224, 128,   0],  // policia -- oeste afastado
+            [58,  544,  288, 128,  64],  // normal  -- sul
+            [44,  608,  318, 128, 128],  // medio   -- sul-leste
+            [44,  480,  318, 128,   0],  // medio   -- sul-oeste
         ];
 
         carData.forEach(function(d) {
