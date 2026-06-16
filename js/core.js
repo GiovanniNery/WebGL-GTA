@@ -72,7 +72,7 @@ GTA.Game = function ( ) {
 
         var i, car;
 
-        // 8 carros estrategicos perto do spawn
+        // 8 carros estrategicos
         var carData = [
             [58,  544,  224, 128,   0],
             [4,   608,  224, 128,  64],
@@ -111,16 +111,11 @@ GTA.Game = function ( ) {
             if (s[y] && s[y][x]) scene.add(s[y][x]);
         };
         var scene = this.scene, secs = this.map.sections;
-        // Secoes originais (area da camera inicial em block 105,119)
-        addSec(secs, 6, 5); addSec(secs, 6, 6); addSec(secs, 6, 7);
-        addSec(secs, 7, 5); addSec(secs, 7, 6); addSec(secs, 7, 7);
-        addSec(secs, 8, 5); addSec(secs, 8, 6); addSec(secs, 8, 7);
-        // Secoes perto do spawn do player (block 8,3 -> secao 0,0)
         addSec(secs, 0, 0); addSec(secs, 0, 1); addSec(secs, 0, 2);
         addSec(secs, 1, 0); addSec(secs, 1, 1); addSec(secs, 1, 2);
         addSec(secs, 2, 0); addSec(secs, 2, 1); addSec(secs, 2, 2);
+        addSec(secs, 3, 0); addSec(secs, 3, 1); addSec(secs, 3, 2);
 
-        // Esconde tela de carregamento
         var loadEl = document.getElementById('_loading');
         if (loadEl) loadEl.style.display = 'none';
 
@@ -150,44 +145,37 @@ GTA.Game = function ( ) {
     methods = {
         animate: function() {
             requestAnimationFrame( methods.animate );
-
-            var delta = clock.getDelta();
-
-            _.physics.updateWorld(_, GTA.getBlock(_.player.position.x, _.player.position.y, 2));
-
-            _.physics.world.Step( 1/60, 10, 10 );
-            _.physics.world.ClearForces();
-
-            // Atualiza pedestres IA
-            if (GTA.aiPedestrians && GTA.aiPedestrians.length > 0) {
-                GTA.aiPedestrians.forEach(function(ped) {
-                    if (ped && typeof ped.updateAI === 'function') {
-                        ped.updateAI(delta);
-                    }
-                });
+            try {
+                var delta = clock.getDelta();
+                _.physics.updateWorld(_, GTA.getBlock(_.player.position.x, _.player.position.y, 2));
+                _.physics.world.Step( 1/60, 10, 10 );
+                _.physics.world.ClearForces();
+                if (GTA.aiPedestrians && GTA.aiPedestrians.length > 0) {
+                    GTA.aiPedestrians.forEach(function(ped) {
+                        if (ped && typeof ped.updateAI === 'function') {
+                            try { ped.updateAI(delta); } catch(e) {}
+                        }
+                    });
+                }
+                methods.render.call(_, delta);
+            } catch(e) {
+                GTA.Log('animate error: ' + e.message);
             }
-
-            methods.render.call(_, delta);
         },
         render: function(delta) {
             this.player.update( delta );
-            
             this.camera.position.x = this.player.position.x;
             this.camera.position.y = this.player.position.y;
-            
             var x = Math.round((this.camera.position.x / 64) / GTA.SectionSize),
             y = Math.round((-(this.camera.position.y / 64)) / GTA.SectionSize);
-            
             if ( x !== cameraZone[ 0 ] || y !== cameraZone[ 1 ] ) {
                 (function(game, x, y){})(this, x, y);
                 cameraZone[ 0 ] = x;
                 cameraZone[ 1 ] = y;
             }
-            
             if (GTA.Debug.enabled && GTA.Debug.positionData) {
                 GTA.Debug.updatePositionData.call( this );
             }
-            
             this.renderer.render( this.scene, this.camera );
         }
     };
@@ -220,8 +208,5 @@ GTA.Rotation = function ( gtaAngle ) {
 GTA.SectionSize = 16;
 GTA.Blocks = [];
 GTA.Base = [];
-
-// Lista global de carros
 GTA.allCars = [];
-// Lista global de pedestres IA
 GTA.aiPedestrians = [];
