@@ -46,10 +46,8 @@ GTA.spawnAIPedestrians = function ( game ) {
 // Classe Pedestre IA
 GTA.AIPedestrian = function ( game, worldX, worldY, pedOffset ) {
 
-    var standingIdx = pedOffset + 98;
-    if (!game.sprites[standingIdx]) {
-        standingIdx = pedOffset;
-    }
+    // Usa primeiro sprite de pedestre (pedOffset+0) para nao coincidir com o player
+    var standingIdx = pedOffset;
 
     var geom = THREE.GeometryUtils.clone( game.sprites[standingIdx].sprite.geometry );
     var mat  = game.sprites[standingIdx].sprite.material;
