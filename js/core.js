@@ -72,21 +72,18 @@ GTA.Game = function ( ) {
 
         var i, car;
 
-        // 8 carros perto do spawn do player
-        // Player nasce em Three.js (512, -192) [GTA.Debug.startPosition=[8,3,2]]
-        // Formula: carX = Three.js_x + 32
-        //          tipo58/4 (h=64): carY = 32 - Three.js_y
-        //          tipo44  (h=124): carY = 62 - Three.js_y
+        // 8 carros estrategicos
+        // Player nasce em Three.js (512, -192)
         // [tipo, carX, carY, z, angulo]
         var carData = [
-            [58,  544,  224, 128,   0],  // normal  -- junto ao player
-            [4,   608,  224, 128,  64],  // policia -- leste
-            [58,  672,  224, 128, 128],  // normal  -- leste afastado
-            [44,  480,  254, 128, 192],  // medio   -- oeste
-            [4,   416,  224, 128,   0],  // policia -- oeste afastado
-            [58,  544,  288, 128,  64],  // normal  -- sul
-            [44,  608,  318, 128, 128],  // medio   -- sul-leste
-            [44,  480,  318, 128,   0],  // medio   -- sul-oeste
+            [58,  544,  224, 128,   0],
+            [4,   608,  224, 128,  64],
+            [58,  672,  224, 128, 128],
+            [44,  480,  254, 128, 192],
+            [4,   416,  224, 128,   0],
+            [58,  544,  288, 128,  64],
+            [44,  608,  318, 128, 128],
+            [44,  480,  318, 128,   0],
         ];
 
         carData.forEach(function(d) {
@@ -95,8 +92,6 @@ GTA.Game = function ( ) {
                 c.addCar(this, d[0], d[1], d[2], d[3], d[4]);
                 c.initPhysics(this);
                 this.map.addObject(c);
-                // Adiciona direto na scene para garantir visibilidade
-                try { this.scene.add(c); } catch(e2) {}
                 this.activeObjects.push(c);
                 GTA.allCars.push(c);
             } catch(e) {
@@ -118,7 +113,7 @@ GTA.Game = function ( ) {
             if (s[y] && s[y][x]) scene.add(s[y][x]);
         };
         var scene = this.scene, secs = this.map.sections;
-        // Secoes originais (camera inicial em block 105,119)
+        // Secoes originais (area da camera inicial)
         addSec(secs, 6, 5); addSec(secs, 6, 6); addSec(secs, 6, 7);
         addSec(secs, 7, 5); addSec(secs, 7, 6); addSec(secs, 7, 7);
         addSec(secs, 8, 5); addSec(secs, 8, 6); addSec(secs, 8, 7);
