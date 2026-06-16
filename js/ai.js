@@ -1,9 +1,9 @@
 /*
  * ai.js - Pedestres IA para WebGL-GTA
- * Movimento puro Three.js (sem Box2D) — estavel e visivel
+ * Movimento puro Three.js (sem Box2D) â estavel e visivel
  */
 
-// ── Spawn de pedestres IA ─────────────────────────────────────
+// ââ Spawn de pedestres IA âââââââââââââââââââââââââââââââââââââ
 GTA.spawnAIPedestrians = function ( game ) {
 
     var pedOffset = game.spriteNumbers.offset.PED;
@@ -13,6 +13,7 @@ GTA.spawnAIPedestrians = function ( game ) {
         return;
     }
 
+    // Posicoes ao redor do spawn do player (512, -192)
     var positions = [
         [448, -128],
         [512, -128],
@@ -38,11 +39,12 @@ GTA.spawnAIPedestrians = function ( game ) {
     GTA.Log('AI: ' + spawned + ' pedestres criados');
 };
 
-// ── Classe Pedestre IA (sem Box2D — movimento Three.js puro) ──
+// ââ Classe Pedestre IA (sem Box2D â movimento Three.js puro) ââ
 GTA.AIPedestrian = function ( game, worldX, worldY, pedOffset ) {
 
     THREE.Object3D.call(this);
 
+    // Cria sprite do pedestre
     try {
         var geom = THREE.GeometryUtils.clone( game.sprites[pedOffset].sprite.geometry );
         var mat  = game.sprites[pedOffset].sprite.material;
@@ -54,26 +56,32 @@ GTA.AIPedestrian = function ( game, worldX, worldY, pedOffset ) {
         this.sprite = null;
     }
 
+    // Posicao inicial
     this.position.x = worldX;
     this.position.y = worldY;
-    this.position.z = 2;
+    this.position.z = 128; // mesmo nivel do player (chao=32, player=128)
 
+    // Estado da IA
     this._aiTimer    = Math.random() * 3;
     this._aiInterval = 2 + Math.random() * 4;
     this._aiAngle    = Math.random() * Math.PI * 2;
     this._stopped    = false;
     this._stopTimer  = 0;
     this._speed      = 25 + Math.random() * 20;
+
+    // Fica perto do spawn
     this._originX = worldX;
     this._originY = worldY;
     this._maxDist  = 200;
 
+    // Adiciona ao scene
     game.scene.add(this);
 };
 
 GTA.AIPedestrian.prototype = Object.create(THREE.Object3D.prototype);
 GTA.AIPedestrian.prototype.constructor = GTA.AIPedestrian;
 
+// Update chamado a cada frame por core.js
 GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
     try {
         this._aiTimer += delta;
@@ -81,6 +89,7 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         if (this._aiTimer >= this._aiInterval) {
             this._aiTimer    = 0;
             this._aiInterval = 2 + Math.random() * 5;
+
             var dx   = this.position.x - this._originX;
             var dy   = this.position.y - this._originY;
             var dist = Math.sqrt(dx*dx + dy*dy);
@@ -89,6 +98,7 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
                 this._stopped   = true;
                 this._stopTimer = 1 + Math.random() * 2;
             } else if (dist > this._maxDist) {
+                // Volta para a origem
                 this._stopped = false;
                 this._aiAngle = Math.atan2(this._originY - this.position.y,
                                            this._originX - this.position.x);
@@ -112,5 +122,8 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         if (this.sprite) {
             this.sprite.rotation.z = -(this._aiAngle - Math.PI / 2);
         }
-    } catch(e) {}
+
+    } catch(e) {
+        // Nunca quebra o animate loop
+    }
 };
