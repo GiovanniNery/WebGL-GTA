@@ -72,11 +72,7 @@ GTA.Game = function ( ) {
 
         var i, car;
 
-        // ââ 8 carros estratÃ©gicos ââââââââââââââââââââââââââââââ
-        // FÃ³rmula: Three.js x = carX-32, Three.js y = -(carY-20)
-        // Player nasce em Three.js (6720, -7616) â carX=6752, carY=7636
-        // [tipo, carX, carY, z, angulo]
-                // -- 8 carros estrategicos perto do spawn --
+        // 8 carros perto do spawn do player
         // Player nasce em Three.js (512, -192) [GTA.Debug.startPosition=[8,3,2]]
         // Formula: carX = Three.js_x + 32
         //          tipo58/4 (h=64): carY = 32 - Three.js_y
@@ -99,6 +95,8 @@ GTA.Game = function ( ) {
                 c.addCar(this, d[0], d[1], d[2], d[3], d[4]);
                 c.initPhysics(this);
                 this.map.addObject(c);
+                // Adiciona direto na scene para garantir visibilidade
+                try { this.scene.add(c); } catch(e2) {}
                 this.activeObjects.push(c);
                 GTA.allCars.push(c);
             } catch(e) {
@@ -106,7 +104,7 @@ GTA.Game = function ( ) {
             }
         }.bind(this));
 
-        // ââ Pedestres IA âââââââââââââââââââââââââââââââââââââ
+        // Pedestres IA
         if (typeof GTA.spawnAIPedestrians === 'function') {
             GTA.spawnAIPedestrians(this);
         }
@@ -116,15 +114,18 @@ GTA.Game = function ( ) {
             Math.round((-(this.camera.position.y / 64)) / GTA.SectionSize)
         ];
         
-        // Player em block(105,119) â section y=7, x=6
-        // sections[y_sec][x_sec] conforme map.addObject
         var addSec = function(s, y, x) {
             if (s[y] && s[y][x]) scene.add(s[y][x]);
         };
         var scene = this.scene, secs = this.map.sections;
+        // Secoes originais (camera inicial em block 105,119)
         addSec(secs, 6, 5); addSec(secs, 6, 6); addSec(secs, 6, 7);
         addSec(secs, 7, 5); addSec(secs, 7, 6); addSec(secs, 7, 7);
         addSec(secs, 8, 5); addSec(secs, 8, 6); addSec(secs, 8, 7);
+        // Secoes perto do spawn do player (block 8,3 -> secao 0,0)
+        addSec(secs, 0, 0); addSec(secs, 0, 1); addSec(secs, 0, 2);
+        addSec(secs, 1, 0); addSec(secs, 1, 1); addSec(secs, 1, 2);
+        addSec(secs, 2, 0); addSec(secs, 2, 1); addSec(secs, 2, 2);
 
         // Esconde tela de carregamento
         var loadEl = document.getElementById('_loading');
@@ -157,7 +158,7 @@ GTA.Game = function ( ) {
         animate: function() {
             requestAnimationFrame( methods.animate );
 
-            var delta = clock.getDelta(); // Uma chamada por frame
+            var delta = clock.getDelta();
 
             _.physics.updateWorld(_, GTA.getBlock(_.player.position.x, _.player.position.y, 2));
 
