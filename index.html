@@ -4,7 +4,7 @@
     * @author Niklas von Hertzen <niklas at hertzen.com>
     * @created 30.12.2011
     * @website http://hertzen.com
-    * Modificado por ATG1 - mobile, HUD, carro, pedestres IA
+    * Modificado por ATG1 â mobile, HUD, carro, pedestres IA
     -->
     <head>
         <title>ATG1</title>
@@ -91,6 +91,7 @@
     </head>
     <body>
 
+<!-- âââ MENU DE INICIO ââââââââââââââââââââââââââââââââââââââââââ -->
 <div id="_menu" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:100000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px;">
     <div style="color:#cc0000;font-family:'Courier New',monospace;font-size:72px;font-weight:900;letter-spacing:8px;text-shadow:3px 3px 0 #440000,0 0 60px #ff0000;">ATG1</div>
     <div style="color:#555;font-family:'Courier New',monospace;font-size:10px;text-align:center;line-height:2.4;letter-spacing:2px;">
@@ -102,11 +103,13 @@
     <button id="_playBtn" style="margin-top:12px;padding:16px 56px;background:#cc0000;color:#fff;border:2px solid #ff4444;border-radius:0;font-size:15px;font-family:'Courier New',monospace;font-weight:bold;cursor:pointer;letter-spacing:4px;">JOGAR</button>
 </div>
 
+<!-- âââ AVISO DE ROTACAO âââââââââââââââââââââââââââââââââââââââââ -->
 <div id="_rotMsg">
     <div style="font-size:48px">&#8635;</div>
     <div>Gire o dispositivo<br>para jogar na horizontal</div>
 </div>
 
+<!-- âââ TELA DE CARREGAMENTO ââââââââââââââââââââââââââââââââââââ -->
 <div id="_loading" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:99997;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
     <div style="color:#cc0000;font-family:'Courier New',monospace;font-size:28px;font-weight:900;letter-spacing:6px;">ATG1</div>
     <div style="color:#aaa;font-family:sans-serif;font-size:14px;">Carregando...</div>
@@ -116,21 +119,34 @@
     <style>@keyframes ldpulse{0%,100%{width:20%}50%{width:80%}}</style>
 </div>
 
+<!-- âââ HUD ââââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
 <div id="_hud" style="display:none;position:fixed;top:0;left:0;width:100%;pointer-events:none;z-index:99990;font-family:'Courier New',monospace;">
-    <div style="position:absolute;top:6px;left:8px;display:flex;flex-direction:column;gap:2px;">
-        <div id="_dinheiro" style="color:#fff;font-size:22px;font-weight:bold;text-shadow:1px 1px 2px #000,0 0 6px #000;">$0</div>
-        <div id="_armaHud" style="color:#fc0;font-size:13px;letter-spacing:1px;text-shadow:1px 1px 2px #000;"></div>
+    <!-- Dinheiro + saude + arma: canto superior esquerdo -->
+    <div style="position:absolute;top:6px;left:8px;display:flex;flex-direction:column;gap:3px;">
+        <div id="_dinheiro" style="color:#fff;font-size:20px;font-weight:bold;text-shadow:1px 1px 2px #000,0 0 6px #000;">$0</div>
+        <!-- 5 coracoes de saude (como GTA2_Unity: Health.cs com 5 slots) -->
+        <div id="_vidaHud" style="font-size:16px;letter-spacing:2px;text-shadow:1px 1px 2px #000;color:#f44;">&#10084;&#10084;&#10084;&#10084;&#10084;</div>
+        <!-- Arma atual + municao -->
+        <div style="display:flex;align-items:center;gap:5px;">
+            <div id="_armaIcone" style="width:12px;height:12px;border:2px solid #fc0;display:none;flex-shrink:0;"></div>
+            <div id="_armaHud" style="color:#fc0;font-size:12px;letter-spacing:1px;text-shadow:1px 1px 2px #000;"></div>
+            <div id="_ammoHud" style="color:#fff;font-size:12px;font-weight:bold;text-shadow:1px 1px 2px #000;"></div>
+        </div>
     </div>
+    <!-- Estrelas: canto superior direito -->
     <div style="position:absolute;top:6px;right:8px;display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
         <div id="_estrelas" style="font-size:26px;color:#444;letter-spacing:3px;text-shadow:1px 1px 2px #000;">&#9734;&#9734;&#9734;&#9734;&#9734;</div>
         <div id="_procuradoTxt" style="color:#888;font-size:12px;letter-spacing:1px;"></div>
     </div>
 </div>
 
+<!-- âââ NOTIFICACAO FLUTUANTE ââââââââââââââââââââââââââââââââââââ -->
 <div id="_notific" style="display:none;position:fixed;top:50px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fc0;font-family:'Courier New',monospace;font-size:11px;font-weight:bold;letter-spacing:2px;padding:6px 16px;border:1px solid #fc0;pointer-events:none;z-index:99995;white-space:nowrap;"></div>
 
+<!-- âââ SIRENE âââââââââââââââââââââââââââââââââââââââââââââââââââ -->
 <div id="_sirene" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:99988;animation:sirenePisca 0.4s linear infinite;"></div>
 
+<!-- âââ FLASH DE TIRO ââââââââââââââââââââââââââââââââââââââââââââ -->
 <div id="_flash" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:99989;background:rgba(255,230,80,0.35);animation:flashTiro 0.15s ease-out forwards;"></div>
 
 </body>
@@ -138,6 +154,7 @@
 <script>
 (function(){
 
+/* ââ Estilos dos controles mobile âââââââââââââââââââââââââââââ */
 var s = document.createElement('style');
 s.textContent =
     'canvas{position:fixed!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;width:auto!important;height:100vh!important;max-width:100vw!important}' +
@@ -163,17 +180,24 @@ document.body.insertAdjacentHTML('beforeend',
     '</div>'
 );
 
+/* ââ Helpers ââââââââââââââââââââââââââââââââââââââââââââââââââ */
 function getPlayer() { return window._gtaGame && window._gtaGame.player; }
 function setMove(flag, on) { var p = getPlayer(); if (p) p[flag] = on; }
 function liberarMovimento() {
     ['moveForward','moveBackward','turnLeft','turnRight'].forEach(function(f){ setMove(f,false); });
 }
 
+/* ââ Sistema HUD ââââââââââââââââââââââââââââââââââââââââââââââ */
 var GTA_dinheiro  = 0;
-var GTA_procurado = 0;
+var GTA_procurado = 0;   // 0-5 estrelas
+var GTA_health    = 5;   // 5 coracoes (como Health.cs GTA2_Unity)
+// Municao por arma (como ArmouryPlayer.cs: weapons[].CurrentAmmo)
+// Pistola = max 99, Metralhadora = max 99
+var GTA_ammo = { 1: 0, 2: 0 };
 
 var TEXTOS_PROCURADO = ['','PROCURADO','MUITO PROCURADO','FUGITIVO','PERIGOSO','INIMIGO PUBLICO'];
-var NOMES_ARMA       = ['', 'PISTOLA', 'METRALHADORA'];
+var NOMES_ARMA       = ['', 'PISTOLA .38', 'METRALHADORA'];
+var CORES_ARMA       = ['', '#fc0', '#f80'];
 
 function atualizarHUD() {
     var p   = getPlayer();
@@ -181,7 +205,23 @@ function atualizarHUD() {
     var elE = document.getElementById('_estrelas');
     var elT = document.getElementById('_procuradoTxt');
     var elA = document.getElementById('_armaHud');
+    var elM = document.getElementById('_ammoHud');
+    var elI = document.getElementById('_armaIcone');
+    var elV = document.getElementById('_vidaHud');
+
     if (elD) elD.textContent = '$' + GTA_dinheiro;
+
+    // Saude: 5 coracoes (cheios/vazios como GTA2_Unity Health.cs)
+    if (elV) {
+        var corVida = '';
+        for (var h = 0; h < 5; h++) {
+            corVida += h < GTA_health ? '&#10084;' : '&#9825;';
+        }
+        elV.innerHTML = corVida;
+        elV.style.color = GTA_health <= 1 ? '#f44' : (GTA_health <= 3 ? '#fa4' : '#f44');
+    }
+
+    // Estrelas de procurado
     if (elE) {
         var txt = '';
         for (var i = 0; i < GTA_procurado; i++) txt += '&#9733;';
@@ -189,11 +229,33 @@ function atualizarHUD() {
         elE.innerHTML = txt;
         elE.style.color = GTA_procurado > 0 ? (GTA_procurado >= 4 ? '#f44' : '#ff0') : '#444';
     }
+
     if (elT) elT.textContent = TEXTOS_PROCURADO[GTA_procurado] || '';
-    if (elA && p) {
+
+    // Arma + municao (como ArmouryPlayer: WeaponChanged(icon, ammo))
+    if (p) {
         var w = p.weapon || 0;
-        elA.textContent = w > 0 ? NOMES_ARMA[w] || '' : '';
-        elA.style.color = w === 1 ? '#fc0' : (w === 2 ? '#f80' : '#fc0');
+        if (elA) {
+            elA.textContent = w > 0 ? NOMES_ARMA[w] || '' : '';
+            elA.style.color = w > 0 ? CORES_ARMA[w] : '#fc0';
+        }
+        if (elM) {
+            if (w > 0 && GTA_ammo[w] !== undefined) {
+                elM.textContent = '[' + GTA_ammo[w] + ']';
+                elM.style.color = GTA_ammo[w] <= 5 ? '#f44' : '#fff';
+            } else {
+                elM.textContent = '';
+            }
+        }
+        if (elI) {
+            if (w > 0) {
+                elI.style.display = 'inline-block';
+                elI.style.borderColor = CORES_ARMA[w];
+                elI.style.background = w === 2 ? 'rgba(255,136,0,0.3)' : 'rgba(255,204,0,0.3)';
+            } else {
+                elI.style.display = 'none';
+            }
+        }
     }
 }
 
@@ -202,22 +264,27 @@ function adicionarDinheiro(valor) {
     atualizarHUD();
 }
 
-var GTA_roubosCarros = [];
-var GTA_timerFuga    = 0;
+/* ââ Sistema de procurado (3 carros em 2 min = 1 estrela) âââââ */
+var GTA_roubosCarros = [];   // timestamps (ms) dos roubos
+var GTA_timerFuga    = 0;    // segundos fora do carro sem crime
 var GTA_ultimoT      = performance.now();
 var GTA_sireneLig    = false;
 
 function registrarRoubo() {
     var agora = Date.now();
-    var limite = 2 * 60 * 1000;
+    var limite = 2 * 60 * 1000; // 2 minutos em ms
     GTA_roubosCarros.push(agora);
+    // Remove roubos mais antigos que 2 min
     GTA_roubosCarros = GTA_roubosCarros.filter(function(t){ return agora - t < limite; });
+
     if (GTA_roubosCarros.length === 3) {
+        // Terceiro roubo em 2 min: ganha 1 estrela
         GTA_procurado = Math.min(5, GTA_procurado + 1);
         GTA_timerFuga = 0;
         mostrarNotificacao('POLICIA AVISO!');
         atualizarHUD();
     } else if (GTA_roubosCarros.length > 3) {
+        // Cada roubo adicional enquanto procurado: mais 1 estrela
         GTA_procurado = Math.min(5, GTA_procurado + 1);
         GTA_timerFuga = 0;
         atualizarHUD();
@@ -228,11 +295,13 @@ function loopProcurado() {
     var agora = performance.now();
     var delta = (agora - GTA_ultimoT) / 1000;
     GTA_ultimoT = agora;
+
     if (GTA_procurado > 0) {
         var p = getPlayer();
         var noVeiculo = p && p.inCar;
         if (!noVeiculo) {
             GTA_timerFuga += delta;
+            // Quanto mais estrelas, mais tempo pra sumir (25s, 35s, 45s, 55s, 65s)
             var tempoDecair = 15 + GTA_procurado * 10;
             if (GTA_timerFuga >= tempoDecair) {
                 GTA_timerFuga = 0;
@@ -241,15 +310,23 @@ function loopProcurado() {
                 if (GTA_procurado === 0) mostrarNotificacao('FORA DE PERIGO');
             }
         } else {
+            // No carro e procurado: reseta timer de fuga
             GTA_timerFuga = 0;
         }
     }
     requestAnimationFrame(loopProcurado);
 }
 
-window.GTA_onEnterCar = function(carro) { registrarRoubo(); };
-window.GTA_onExitCar  = function() { if (GTA_sireneLig) toggleSirene(); };
+/* ââ Callbacks de entrar/sair do carro âââââââââââââââââââââââ */
+window.GTA_onEnterCar = function(carro) {
+    registrarRoubo();
+    // Sem dinheiro por dirigir - dinheiro vem sÃ³ de missoes/roubos
+};
+window.GTA_onExitCar = function() {
+    if (GTA_sireneLig) toggleSirene();
+};
 
+/* ââ Notificacao flutuante ââââââââââââââââââââââââââââââââââââ */
 var _notificTimer = null;
 function mostrarNotificacao(txt) {
     var el = document.getElementById('_notific');
@@ -263,9 +340,15 @@ function mostrarNotificacao(txt) {
     _notificTimer = setTimeout(function(){ el.style.display = 'none'; }, 2600);
 }
 
-var _flashTimer    = null;
-var _metralhaTimer = null;
-var _metralhaHold  = false;
+/* ââ Sistema de arma (inspirado em ArmouryPlayer.cs + Weapon.cs) ââ */
+// weapon 0 = sem arma, 1 = pistola .38, 2 = metralhadora
+// Municao finita: pistola pickup = 30, MG pickup = 50
+// Rate of fire: pistola = 1 tiro/0.4s, MG = 10 tiros/s
+
+var _flashTimer       = null;
+var _metralhaTimer    = null;
+var _metralhaHold     = false;
+var _pistolaCooldown  = false;   // rate-of-fire pistola
 
 function mostrarFlash() {
     var flash = document.getElementById('_flash');
@@ -281,7 +364,26 @@ function mostrarFlash() {
 function dispararArma() {
     var p = getPlayer();
     if (!p || p.inCar) return;
+    var w = p.weapon || 0;
+    if (w === 0) return; // sem arma
+
+    // Verificar municao (como Weapon.cs: if (currentAmmoMagazines < 1) return)
+    if (GTA_ammo[w] !== undefined && GTA_ammo[w] <= 0) {
+        // Sem municao â remove arma (como ArmouryPlayer: SetWeaponIndexZero)
+        p.weapon = 0;
+        mostrarNotificacao('SEM MUNICAO');
+        atualizarHUD();
+        return;
+    }
+
+    // Consumir municao (como Weapon.cs: DecreaseAmmo(1))
+    if (GTA_ammo[w] !== undefined) {
+        GTA_ammo[w]--;
+        if (GTA_ammo[w] < 0) GTA_ammo[w] = 0;
+    }
+
     mostrarFlash();
+    atualizarHUD();
 }
 
 function iniciarMetralhadora() {
@@ -290,7 +392,10 @@ function iniciarMetralhadora() {
     function tiro() {
         if (!_metralhaHold) return;
         dispararArma();
-        _metralhaTimer = setTimeout(tiro, 100);
+        var p = getPlayer();
+        // Para se ficou sem municao
+        if (!p || p.weapon !== 2) { _metralhaHold = false; return; }
+        _metralhaTimer = setTimeout(tiro, 100); // 10 tiros/s (attackRate=600)
     }
     tiro();
 }
@@ -308,14 +413,67 @@ function acaoBotaoPress() {
     } else {
         if (p.weapon === 2) {
             iniciarMetralhadora();
+        } else if (p.weapon === 1) {
+            // Pistola: rate of fire 1 tiro/0.4s (attackRate = 150 RPM)
+            if (!_pistolaCooldown) {
+                dispararArma();
+                _pistolaCooldown = true;
+                setTimeout(function(){ _pistolaCooldown = false; }, 400);
+            }
         } else {
-            dispararArma();
+            // Sem arma: soco (nao faz nada visivel por agora)
         }
     }
 }
 
-function acaoBotaoRelease() { pararMetralhadora(); }
+function acaoBotaoRelease() {
+    pararMetralhadora();
+}
 
+/* ââ Ciclar arma (como ArmouryPlayer.cs: NextWeapon) âââââââââââ */
+function ciclarArma() {
+    var p = getPlayer();
+    if (!p || p.inCar) return;
+    // Lista de armas disponiveis (com municao)
+    var disponiveis = [0]; // sempre tem "sem arma"
+    if (GTA_ammo[1] > 0) disponiveis.push(1);
+    if (GTA_ammo[2] > 0) disponiveis.push(2);
+
+    var idx = disponiveis.indexOf(p.weapon);
+    idx = (idx + 1) % disponiveis.length;
+    p.weapon = disponiveis[idx];
+
+    if (p.weapon > 0) {
+        mostrarNotificacao(NOMES_ARMA[p.weapon]);
+    }
+    atualizarHUD();
+}
+
+// Expoe globals para player.js acessar via keydown
+window.GTA_cycleWeapon = ciclarArma;
+
+// Atirar via teclado (F key hold)
+var _fKeyHold = false;
+var _fKeyTimer = null;
+window.GTA_atirarTeclado = function(pressed) {
+    var p = getPlayer();
+    if (!p || p.inCar) return;
+    if (pressed) {
+        if (p.weapon === 2) {
+            iniciarMetralhadora();
+        } else if (p.weapon === 1) {
+            if (!_pistolaCooldown) {
+                dispararArma();
+                _pistolaCooldown = true;
+                setTimeout(function(){ _pistolaCooldown = false; }, 400);
+            }
+        }
+    } else {
+        pararMetralhadora();
+    }
+};
+
+/* ââ Sirene âââââââââââââââââââââââââââââââââââââââââââââââââââ */
 function toggleSirene() {
     GTA_sireneLig = !GTA_sireneLig;
     var sir = document.getElementById('_sirene');
@@ -324,30 +482,34 @@ function toggleSirene() {
     if (btn) btn.style.background = GTA_sireneLig ? 'rgba(0,80,200,.85)' : 'rgba(20,130,20,.75)';
 }
 
-// Pickups de armas
-// Player nasce em Three.js (512, -192) [GTA.Debug.startPosition=[8,3,2]]
+/* ââ Pickups de armas âââââââââââââââââââââââââââââââââââââââââââ */
+// Pistola .38 = wireframe CIANO (weapon 1)
+// Metralhadora = wireframe AMARELO (weapon 2)
 var GTA_pickups = [];
 
+// 8 posicoes de pistola .38 nas calcadas (player nasce em Three.js 6720,-7616)
+// Player nasce em Three.js (512, -192) [GTA.Debug.startPosition=[8,3,2]]
 var GTA_PICKUP_38_POS = [
-    {x: 448, y: -140},
-    {x: 512, y: -140},
-    {x: 576, y: -140},
-    {x: 416, y: -210},
-    {x: 608, y: -210},
-    {x: 448, y: -270},
-    {x: 512, y: -270},
-    {x: 576, y: -270},
+    {x: 448, y: -140},   // calcada norte-oeste
+    {x: 512, y: -140},   // calcada norte-centro
+    {x: 576, y: -140},   // calcada norte-leste
+    {x: 416, y: -210},   // calcada oeste
+    {x: 608, y: -210},   // calcada leste
+    {x: 448, y: -270},   // calcada sul-oeste
+    {x: 512, y: -270},   // calcada sul-centro
+    {x: 576, y: -270},   // calcada sul-leste
 ];
 
+// 8 posicoes de metralhadora (mais afastadas / estrategicas)
 var GTA_PICKUP_MG_POS = [
-    {x: 480, y: -155},
-    {x: 544, y: -155},
-    {x: 432, y: -230},
-    {x: 592, y: -230},
-    {x: 432, y: -250},
-    {x: 592, y: -250},
-    {x: 470, y: -300},
-    {x: 554, y: -300},
+    {x: 480, y: -155},   // calcada norte proxima
+    {x: 544, y: -155},   // calcada norte proxima leste
+    {x: 432, y: -230},   // calcada oeste media
+    {x: 592, y: -230},   // calcada leste media
+    {x: 432, y: -250},   // calcada oeste sul
+    {x: 592, y: -250},   // calcada leste sul
+    {x: 470, y: -300},   // calcada sul proxima
+    {x: 554, y: -300},   // calcada sul leste
 ];
 
 function criarPickups(game) {
@@ -356,6 +518,7 @@ function criarPickups(game) {
     var GeomClass = (typeof THREE !== 'undefined') && (THREE.BoxGeometry || THREE.CubeGeometry);
     if (!GeomClass) return;
 
+    // Pistolas .38 â caixa ciano
     GTA_PICKUP_38_POS.forEach(function(pos) {
         try {
             var geom = new GeomClass(7, 7, 7);
@@ -367,6 +530,7 @@ function criarPickups(game) {
         } catch(e) { GTA.Log('Pickup .38 error: ' + e.message); }
     });
 
+    // Metralhadoras â caixa amarela (maior)
     GTA_PICKUP_MG_POS.forEach(function(pos) {
         try {
             var geom = new GeomClass(9, 9, 9);
@@ -387,6 +551,7 @@ function loopPickups() {
         pk.mesh.rotation.x += 0.04;
         pk.mesh.rotation.z += 0.03;
         pk.mesh.position.z  = 8 + Math.sin(t + pk.pos.x * 0.01) * 3;
+
         if (!p) return;
         var dx   = p.position.x - pk.pos.x;
         var dy   = p.position.y - pk.pos.y;
@@ -394,14 +559,22 @@ function loopPickups() {
         if (dist < 18) {
             pk.ativa = false;
             if (window._gtaGame) window._gtaGame.scene.remove(pk.mesh);
-            p.weapon = pk.tipo;
-            mostrarNotificacao(pk.tipo === 2 ? 'METRALHADORA OBTIDA!' : 'PISTOLA .38 OBTIDA!');
+            // Adiciona municao (como ArmouryPlayer.cs: IncreaseAmmoMagazine)
+            // Pistola .38 = +30 balas, Metralhadora = +50 balas
+            var ammoGain = pk.tipo === 2 ? 50 : 30;
+            GTA_ammo[pk.tipo] = Math.min(99, (GTA_ammo[pk.tipo] || 0) + ammoGain);
+            // Equipa a arma recolhida se nao tinha arma
+            if (!p.weapon || p.weapon === 0) {
+                p.weapon = pk.tipo;
+            }
+            mostrarNotificacao(pk.tipo === 2 ? 'METRALHADORA +50' : 'PISTOLA .38 +30');
             atualizarHUD();
         }
     });
     requestAnimationFrame(loopPickups);
 }
 
+/* ââ Botao JOGAR ââââââââââââââââââââââââââââââââââââââââââââââ */
 function iniciarJogo() {
     document.getElementById('_menu').style.display = 'none';
     document.getElementById('mc').style.display    = 'block';
@@ -409,11 +582,15 @@ function iniciarJogo() {
     atualizarHUD();
     start();
     loopProcurado();
+
+    // Cria pickups e corrige depthTest do player apos o jogo carregar
     setTimeout(function tentarSetup() {
         var g = window._gtaGame;
         if (!g || !g.scene || !g.player) { setTimeout(tentarSetup, 500); return; }
         criarPickups(g);
         loopPickups();
+        // Fix: player nao some embaixo de estruturas elevadas
+        // depthTest=false faz o sprite do player renderizar sempre na frente
         try {
             if (g.player.sprite && g.player.sprite.material) {
                 g.player.sprite.material.depthTest = false;
@@ -427,6 +604,7 @@ document.getElementById('_playBtn').addEventListener('click', iniciarJogo);
 
 if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){});
 
+/* ââ Joystick âââââââââââââââââââââââââââââââââââââââââââââââââ */
 var jAtivo=false, jBX=0, jBY=0, JR=54;
 var jbase = document.getElementById('jbase');
 var thumb  = document.getElementById('jthumb');
@@ -459,6 +637,7 @@ function moverJoy(cx,cy){
     setMove('turnRight',    dx >  th);
 }
 
+/* ââ Botao ENTRAR CARRO âââââââââââââââââââââââââââââââââââââââ */
 document.getElementById('ab1').addEventListener('touchstart',function(e){
     e.preventDefault();
     var p = getPlayer();
@@ -466,6 +645,7 @@ document.getElementById('ab1').addEventListener('touchstart',function(e){
 },{passive:false});
 document.getElementById('ab1').addEventListener('touchend',function(e){e.preventDefault();},{passive:false});
 
+/* ââ Botao ACAO âââââââââââââââââââââââââââââââââââââââââââââââ */
 document.getElementById('ab2').addEventListener('touchstart',function(e){
     e.preventDefault(); acaoBotaoPress();
 },{passive:false});
@@ -473,6 +653,7 @@ document.getElementById('ab2').addEventListener('touchend',function(e){
     e.preventDefault(); acaoBotaoRelease();
 },{passive:false});
 
+/* ââ Botao DERRAPAR âââââââââââââââââââââââââââââââââââââââââââ */
 document.getElementById('ab3').addEventListener('touchstart',function(e){
     e.preventDefault(); setMove('handbrake',true);
 },{passive:false});
