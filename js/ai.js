@@ -14,18 +14,16 @@ GTA.spawnAIPedestrians = function ( game ) {
         return;
     }
 
-    // Player nasce em Three.js (6720, -7616)
-    // initPhysics: bodyDef.position.y = -(this.position.y) / PhysicsScale
-    // Para Three.js y = -7616: worldY deve ser NEGATIVO (-7616)
+    // Player nasce em Three.js (512, -192) [GTA.Debug.startPosition=[8,3,2]]
     var positions = [
-        [6660, -7560],  // calçada norte-oeste
-        [6720, -7545],  // calçada norte (frente ao player)
-        [6780, -7575],  // calçada norte-leste
-        [6640, -7640],  // calçada oeste
-        [6800, -7640],  // calçada leste
-        [6660, -7710],  // calçada sul-oeste
-        [6720, -7740],  // calçada sul
-        [6780, -7700],  // calçada sul-leste
+        [448, -128],  // calcada norte-oeste
+        [512, -128],  // calcada norte (frente ao player)
+        [576, -128],  // calcada norte-leste
+        [416, -192],  // rua oeste
+        [608, -192],  // rua leste
+        [448, -256],  // rua sul-oeste
+        [512, -256],  // rua sul
+        [576, -256],  // rua sul-leste
     ];
 
     var spawned = 0;
