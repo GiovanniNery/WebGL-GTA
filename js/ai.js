@@ -98,10 +98,12 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
                 this._stopped   = true;
                 this._stopTimer = 1 + Math.random() * 2;
             } else if (dist > this._maxDist) {
-                // Volta para a origem
+                // Volta para a origem â mesma convencao do player (angle=0 â move -y Three.js)
                 this._stopped = false;
-                this._aiAngle = Math.atan2(this._originY - this.position.y,
-                                           this._originX - this.position.x);
+                this._aiAngle = Math.atan2(
+                    this.position.x - this._originX,
+                    this.position.y - this._originY
+                );
             } else {
                 this._stopped = false;
                 this._aiAngle = Math.random() * Math.PI * 2;
@@ -115,12 +117,13 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
 
         if (!this._stopped) {
             var spd = this._speed * delta;
-            this.position.x += Math.cos(this._aiAngle) * spd;
-            this.position.y += Math.sin(this._aiAngle) * spd;
+            // Mesma convencao do player: angle=0 â dx=0, dy=-1 (sul na tela)
+            this.position.x += -Math.sin(this._aiAngle) * spd;
+            this.position.y += -Math.cos(this._aiAngle) * spd;
         }
 
         if (this.sprite) {
-            this.sprite.rotation.z = -(this._aiAngle - Math.PI / 2);
+            this.sprite.rotation.z = -this._aiAngle;
         }
 
     } catch(e) {
