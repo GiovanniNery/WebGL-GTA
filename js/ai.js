@@ -1,169 +1,116 @@
 /*
- * ai.js - Pedestres IA e trafego para WebGL-GTA
- * Construido em cima do codigo original de Niklas von Hertzen
- * Usa GTA.Pedestrian existente com comportamento de IA
+ * ai.js - Pedestres IA para WebGL-GTA
+ * Movimento puro Three.js (sem Box2D) — estavel e visivel
  */
 
-// Spawn de pedestres IA (chamado por core.js)
+// ── Spawn de pedestres IA ─────────────────────────────────────
 GTA.spawnAIPedestrians = function ( game ) {
 
     var pedOffset = game.spriteNumbers.offset.PED;
 
     if (!game.sprites || !game.sprites[pedOffset]) {
-        GTA.Log('AI: sprites de pedestres nao disponiveis ainda');
+        GTA.Log('AI: sprites de pedestres nao disponiveis');
         return;
     }
 
-    // Player nasce em Three.js (512, -192) [GTA.Debug.startPosition=[8,3,2]]
     var positions = [
-        [448, -128],  // calcada norte-oeste
-        [512, -128],  // calcada norte (frente ao player)
-        [576, -128],  // calcada norte-leste
-        [416, -192],  // rua oeste
-        [608, -192],  // rua leste
-        [448, -256],  // rua sul-oeste
-        [512, -256],  // rua sul
-        [576, -256],  // rua sul-leste
+        [448, -128],
+        [512, -128],
+        [576, -128],
+        [416, -192],
+        [608, -192],
+        [448, -256],
+        [512, -256],
+        [576, -256],
     ];
 
     var spawned = 0;
-
     positions.forEach(function(pos) {
         try {
             var ped = new GTA.AIPedestrian(game, pos[0], pos[1], pedOffset);
-            if (ped) {
-                GTA.aiPedestrians.push(ped);
-                spawned++;
-            }
+            GTA.aiPedestrians.push(ped);
+            spawned++;
         } catch(e) {
-            GTA.Log('AI ped error: ' + e.message);
+            GTA.Log('AI ped spawn error: ' + e.message);
         }
     });
 
     GTA.Log('AI: ' + spawned + ' pedestres criados');
 };
 
-// Classe Pedestre IA
+// ── Classe Pedestre IA (sem Box2D — movimento Three.js puro) ──
 GTA.AIPedestrian = function ( game, worldX, worldY, pedOffset ) {
 
-    // Usa primeiro sprite de pedestre (pedOffset+0) para nao coincidir com o player
-    var standingIdx = pedOffset;
+    THREE.Object3D.call(this);
 
-    var geom = THREE.GeometryUtils.clone( game.sprites[standingIdx].sprite.geometry );
-    var mat  = game.sprites[standingIdx].sprite.material;
-    var sprite = new THREE.Mesh(geom, mat);
-    sprite.geometry.dynamic = true;
-
-    this.sprite = sprite;
-    this.add(sprite);
-    this.speed = 1.5 + Math.random() * 1.5;
-    this.rotationSpeed = 0.1;
-
-    this.registerAnimations(pedOffset);
-    this.spriteAnimator = new GTA.SpriteAnimation(game, standingIdx, sprite);
-    this.lastframe = 0;
-    this.spriteframe = 0;
-    this.weapon = 0;
+    try {
+        var geom = THREE.GeometryUtils.clone( game.sprites[pedOffset].sprite.geometry );
+        var mat  = game.sprites[pedOffset].sprite.material;
+        this.sprite = new THREE.Mesh(geom, mat);
+        this.sprite.geometry.dynamic = true;
+        this.add(this.sprite);
+    } catch(e) {
+        GTA.Log('AI sprite error: ' + e.message);
+        this.sprite = null;
+    }
 
     this.position.x = worldX;
     this.position.y = worldY;
     this.position.z = 2;
-
-    this.initPhysics(game);
-
-    this.moveForward  = true;
-    this.moveBackward = false;
-    this.turnLeft     = false;
-    this.turnRight    = false;
 
     this._aiTimer    = Math.random() * 3;
     this._aiInterval = 2 + Math.random() * 4;
     this._aiAngle    = Math.random() * Math.PI * 2;
     this._stopped    = false;
     this._stopTimer  = 0;
-
-    this.physics.SetAngle(this._aiAngle);
+    this._speed      = 25 + Math.random() * 20;
+    this._originX = worldX;
+    this._originY = worldY;
+    this._maxDist  = 200;
 
     game.scene.add(this);
-
-    this.game = game;
 };
 
-// Herda de GTA.Pedestrian
-GTA.AIPedestrian.prototype = new THREE.Object3D();
+GTA.AIPedestrian.prototype = Object.create(THREE.Object3D.prototype);
 GTA.AIPedestrian.prototype.constructor = GTA.AIPedestrian;
 
-GTA.AIPedestrian.prototype.initPhysics      = GTA.Pedestrian.prototype.initPhysics;
-GTA.AIPedestrian.prototype.registerAnimations = GTA.Pedestrian.prototype.registerAnimations;
-GTA.AIPedestrian.prototype.movePedestrian   = GTA.Pedestrian.prototype.movePedestrian;
-
-// Update de IA (chamado a cada frame por core.js)
 GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
+    try {
+        this._aiTimer += delta;
 
-    this._aiTimer += delta;
+        if (this._aiTimer >= this._aiInterval) {
+            this._aiTimer    = 0;
+            this._aiInterval = 2 + Math.random() * 5;
+            var dx   = this.position.x - this._originX;
+            var dy   = this.position.y - this._originY;
+            var dist = Math.sqrt(dx*dx + dy*dy);
 
-    if (this._aiTimer >= this._aiInterval) {
-        this._aiTimer = 0;
-        this._aiInterval = 2 + Math.random() * 5;
-
-        var roll = Math.random();
-
-        if (roll < 0.15) {
-            this._stopped = true;
-            this._stopTimer = 1 + Math.random() * 2;
-            this.moveForward = false;
-        } else {
-            this._stopped = false;
-            this._aiAngle = Math.random() * Math.PI * 2;
-            this.physics.SetAngle(this._aiAngle);
-            this.moveForward = true;
+            if (Math.random() < 0.15) {
+                this._stopped   = true;
+                this._stopTimer = 1 + Math.random() * 2;
+            } else if (dist > this._maxDist) {
+                this._stopped = false;
+                this._aiAngle = Math.atan2(this._originY - this.position.y,
+                                           this._originX - this.position.x);
+            } else {
+                this._stopped = false;
+                this._aiAngle = Math.random() * Math.PI * 2;
+            }
         }
-    }
 
-    if (this._stopped) {
-        this._stopTimer -= delta;
-        if (this._stopTimer <= 0) {
-            this._stopped = false;
-            this.moveForward = true;
+        if (this._stopped) {
+            this._stopTimer -= delta;
+            if (this._stopTimer <= 0) this._stopped = false;
         }
-    }
 
-    if (this.moveForward) {
-        var angle = this.physics.GetAngle();
-        var speed = delta * this.speed;
-        this.physics.SetLinearVelocity(
-            new Box2D.Common.Math.b2Vec2(
-                Math.cos(angle) * speed,
-                Math.sin(angle) * speed
-            )
-        );
-    } else {
-        this.physics.SetLinearVelocity(
-            new Box2D.Common.Math.b2Vec2(0, 0)
-        );
-    }
-
-    var physPos = this.physics.GetPosition();
-    this.movePedestrian(
-        physPos.x  * GTA.PhysicsScale,
-        -physPos.y * GTA.PhysicsScale,
-        0
-    );
-
-    if (this.sprite) {
-        this.sprite.rotation.z = -(this.physics.GetAngle() - 1.57079633);
-    }
-
-    if (this.spriteAnimator && this.moveForward) {
-        this.lastframe += delta;
-        var walkAnim = this.animationSprites[1];
-        if (walkAnim && walkAnim.length > 2 && this.lastframe > walkAnim[2]) {
-            this.lastframe = 0;
-            try {
-                this.spriteAnimator.setSprite(walkAnim[0] + this.spriteframe);
-                this.spriteframe++;
-                if (this.spriteframe >= walkAnim[1]) this.spriteframe = 0;
-            } catch(e) {}
+        if (!this._stopped) {
+            var spd = this._speed * delta;
+            this.position.x += Math.cos(this._aiAngle) * spd;
+            this.position.y += Math.sin(this._aiAngle) * spd;
         }
-    }
+
+        if (this.sprite) {
+            this.sprite.rotation.z = -(this._aiAngle - Math.PI / 2);
+        }
+    } catch(e) {}
 };
