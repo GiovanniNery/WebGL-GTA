@@ -2,7 +2,7 @@
  * @author Niklas von Hertzen <niklas at hertzen.com>
  * @created 30.12.2011 
  * @website http://hertzen.com
- * Enhanced: AI cars + AI pedestrians + enter car support
+ * Enhanced: more cars + AI pedestrians + enter car support
  */
 
 var mouseX = 0, mouseY = 0;
@@ -70,12 +70,41 @@ GTA.Game = function ( ) {
    
     this.loaded = function () {
 
-        // ââ Carros IA ââââââââââââââââââââââââââââââââââââââââââ
-        if (typeof GTA.spawnAICars === 'function') {
-            GTA.spawnAICars(this);
-        }
+        var i, car;
 
-        // ââ Pedestres IA âââââââââââââââââââââââââââââââââââââââ
+        // ââ 8 carros estratÃ©gicos ââââââââââââââââââââââââââââââ
+        // Player nasce em Three.js (512, -192) [GTA.Debug.startPosition=[8,3,2]]
+        // Formula: carX = Three.js_x + 32
+        //          tipo58/4 (h=64): carY = 32 - Three.js_y
+        //          tipo44  (h=124): carY = 62 - Three.js_y
+        // [tipo, carX, carY, z, angulo]
+        var carData = [
+            [58,  544,  224, 128,   0],  // normal  â junto ao player
+            [4,   608,  224, 128,  64],  // policia â leste
+            [58,  672,  224, 128, 128],  // normal  â leste afastado
+            [44,  480,  254, 128, 192],  // medio   â oeste
+            [4,   416,  224, 128,   0],  // policia â oeste afastado
+            [58,  544,  288, 128,  64],  // normal  â sul
+            [44,  608,  318, 128, 128],  // medio   â sul-leste
+            [44,  480,  318, 128,   0],  // medio   â sul-oeste
+        ];
+
+        carData.forEach(function(d) {
+            try {
+                var c = new GTA.GameObjectPosition();
+                c.addCar(this, d[0], d[1], d[2], d[3], d[4]);
+                c.initPhysics(this);
+                this.map.addObject(c);
+                // Fix z: map.addObject coloca z=2 (abaixo do chao z=32); forcar z=128 (nivel do player)
+                if (c.sprite) c.sprite.position.z = 128;
+                this.activeObjects.push(c);
+                GTA.allCars.push(c);
+            } catch(e) {
+                GTA.Log("Car spawn error tipo " + d[0] + ": " + e.message);
+            }
+        }.bind(this));
+
+        // ââ Pedestres IA âââââââââââââââââââââââââââââââââââââ
         if (typeof GTA.spawnAIPedestrians === 'function') {
             GTA.spawnAIPedestrians(this);
         }
@@ -85,17 +114,22 @@ GTA.Game = function ( ) {
             Math.round((-(this.camera.position.y / 64)) / GTA.SectionSize)
         ];
         
+        // Player em block(105,119) â section y=7, x=6
+        // sections[y_sec][x_sec] conforme map.addObject
         var addSec = function(s, y, x) {
             if (s[y] && s[y][x]) scene.add(s[y][x]);
         };
         var scene = this.scene, secs = this.map.sections;
+        // Secoes originais (area da camera inicial)
         addSec(secs, 6, 5); addSec(secs, 6, 6); addSec(secs, 6, 7);
         addSec(secs, 7, 5); addSec(secs, 7, 6); addSec(secs, 7, 7);
         addSec(secs, 8, 5); addSec(secs, 8, 6); addSec(secs, 8, 7);
+        // Secoes perto do spawn do player (block 8,3 -> secao 0,0)
         addSec(secs, 0, 0); addSec(secs, 0, 1); addSec(secs, 0, 2);
         addSec(secs, 1, 0); addSec(secs, 1, 1); addSec(secs, 1, 2);
         addSec(secs, 2, 0); addSec(secs, 2, 1); addSec(secs, 2, 2);
 
+        // Esconde tela de carregamento
         var loadEl = document.getElementById('_loading');
         if (loadEl) loadEl.style.display = 'none';
 
@@ -132,11 +166,6 @@ GTA.Game = function ( ) {
                 _.physics.world.Step( 1/60, 10, 10 );
                 _.physics.world.ClearForces();
 
-                // Atualiza carros IA
-                if (typeof GTA.updateAICars === 'function') {
-                    GTA.updateAICars(delta);
-                }
-
                 // Atualiza pedestres IA
                 if (GTA.aiPedestrians && GTA.aiPedestrians.length > 0) {
                     GTA.aiPedestrians.forEach(function(ped) {
@@ -144,6 +173,11 @@ GTA.Game = function ( ) {
                             try { ped.updateAI(delta); } catch(e) {}
                         }
                     });
+                }
+
+                // Atualiza carros IA
+                if (typeof GTA.updateAICars === 'function') {
+                    try { GTA.updateAICars(delta); } catch(e) {}
                 }
 
                 methods.render.call(_, delta);
@@ -163,7 +197,7 @@ GTA.Game = function ( ) {
                         car.sprite.position.x =  pos.x * _scale - 32;
                         car.sprite.position.y = -pos.y * _scale + 32;
                         car.sprite.position.z = 128;
-                        car.sprite.rotation.z = -car.physics.GetAngle();
+                        car.sprite.rotation.z = car.physics.GetAngle();
                     }
                 } catch(e) {}
             });
@@ -217,6 +251,7 @@ GTA.SectionSize = 16;
 GTA.Blocks = [];
 GTA.Base = [];
 
-// Listas globais
+// Lista global de carros para o sistema de entrar no carro
 GTA.allCars = [];
+// Lista global de pedestres IA
 GTA.aiPedestrians = [];
