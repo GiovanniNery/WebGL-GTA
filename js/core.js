@@ -197,7 +197,7 @@ GTA.Game = function ( ) {
                         car.sprite.position.x =  pos.x * _scale - 32;
                         car.sprite.position.y = -pos.y * _scale + 32;
                         car.sprite.position.z = 128;
-                        car.sprite.rotation.z = car.physics.GetAngle();
+                        car.sprite.rotation.z = -car.physics.GetAngle();
                     }
                 } catch(e) {}
             });
