@@ -129,6 +129,28 @@ GTA.updateAICars = function ( delta ) {
         car.physics.SetAngle(a);
         car.physics.SetAngularVelocity(0);
         car.physics.SetAwake(true);
+
+        // ââ ColisÃ£o com player a pÃ© ââââââââââââââââââââââââââââ
+        var _game = window._gtaGame;
+        if (_game && _game.player && !_game.player.inCar && car.sprite && car.sprite.visible) {
+            var _pl  = _game.player;
+            var _cdx = _pl.position.x - car.sprite.position.x;
+            var _cdy = _pl.position.y - car.sprite.position.y;
+            var _cdist = Math.sqrt(_cdx * _cdx + _cdy * _cdy);
+            if (_cdist < 55) {
+                // Cooldown de 1.5s para nÃ£o tirar toda a vida de uma vez
+                if (!ai._dmgCooldown || ai._dmgCooldown <= 0) {
+                    if (typeof window.GTA_health !== 'undefined') {
+                        window.GTA_health = Math.max(0, window.GTA_health - 1);
+                        GTA.Log('Atropelado! Vida: ' + window.GTA_health);
+                    }
+                    ai._dmgCooldown = 1.5;
+                }
+            }
+        }
+        if (ai._dmgCooldown && ai._dmgCooldown > 0) {
+            ai._dmgCooldown -= delta;
+        }
     });
 };
 
@@ -232,41 +254,67 @@ GTA.AIPedestrian.prototype.constructor = GTA.AIPedestrian;
 
 GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
     try {
-        this._aiTimer += delta;
+        // ââ DetecÃ§Ã£o de fuga: verifica player prÃ³ximo ââââââââââ
+        var _fleeing = false;
+        var _game = window._gtaGame;
+        if (_game && _game.player) {
+            var _pl  = _game.player;
+            var _fdx = _pl.position.x - this.position.x;
+            var _fdy = _pl.position.y - this.position.y;
+            var _fdist = Math.sqrt(_fdx * _fdx + _fdy * _fdy);
 
-        if (this._aiTimer >= this._aiInterval) {
-            this._aiTimer    = 0;
-            this._aiInterval = 2 + Math.random() * 5;
-
-            var dx   = this.position.x - this._originX;
-            var dy   = this.position.y - this._originY;
-            var dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (Math.random() < 0.15) {
-                // Para por um momento
-                this._stopped   = true;
-                this._stopTimer = 1 + Math.random() * 2;
-            } else if (dist > this._maxDist) {
-                // Volta para a calcada de origem
-                this._stopped = false;
+            if (_fdist < 150) {
+                // Foge na direÃ§Ã£o oposta ao player
                 this._aiAngle = Math.atan2(
-                    this._originY - this.position.y,
-                    this._originX - this.position.x
+                    this.position.y - _pl.position.y,
+                    this.position.x - _pl.position.x
                 );
-            } else {
-                // Muda direcao aleatoria
-                this._stopped = false;
-                this._aiAngle = Math.random() * Math.PI * 2;
+                this._stopped  = false;
+                this._fleeSpd  = this._speed * 2.0;  // corre mais rÃ¡pido
+                this._aiTimer  = 0;                  // reseta timer para nÃ£o mudar direÃ§Ã£o tÃ£o cedo
+                _fleeing = true;
             }
         }
 
-        if (this._stopped) {
-            this._stopTimer -= delta;
-            if (this._stopTimer <= 0) this._stopped = false;
+        if (!_fleeing) {
+            this._fleeSpd = 0;
+
+            this._aiTimer += delta;
+
+            if (this._aiTimer >= this._aiInterval) {
+                this._aiTimer    = 0;
+                this._aiInterval = 2 + Math.random() * 5;
+
+                var dx   = this.position.x - this._originX;
+                var dy   = this.position.y - this._originY;
+                var dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (Math.random() < 0.15) {
+                    // Para por um momento
+                    this._stopped   = true;
+                    this._stopTimer = 1 + Math.random() * 2;
+                } else if (dist > this._maxDist) {
+                    // Volta para a calcada de origem
+                    this._stopped = false;
+                    this._aiAngle = Math.atan2(
+                        this._originY - this.position.y,
+                        this._originX - this.position.x
+                    );
+                } else {
+                    // Muda direÃ§Ã£o aleatÃ³ria
+                    this._stopped = false;
+                    this._aiAngle = Math.random() * Math.PI * 2;
+                }
+            }
+
+            if (this._stopped) {
+                this._stopTimer -= delta;
+                if (this._stopTimer <= 0) this._stopped = false;
+            }
         }
 
         if (!this._stopped) {
-            var spd = this._speed * delta;
+            var spd = (_fleeing ? this._fleeSpd : this._speed) * delta;
             this.position.x += Math.cos(this._aiAngle) * spd;
             this.position.y += Math.sin(this._aiAngle) * spd;
         }
