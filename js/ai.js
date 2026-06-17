@@ -19,20 +19,28 @@ GTA.spawnAICars = function ( game ) {
 
     var P = Math.PI;
 
-    // Carros exibidos nas lanes proximas ao player (512, -192).
-    // carX = tx + 64,  carY = 64 - ty   (tipo 58 / tipo 4, height=64)
+    // Carros em segmentos de rua reais perto do player (512, -192).
+    // carX = tx + 64,  carY = 64 - ty   (tipo 58/4, height=64)
     //
-    // [tipo, carX, carY, angulo, speed]
-    //   angulo: East=-PI/2  West=PI/2  South=0  North=PI
+    // Cada carro tem inicio e fim do segmento:
+    //   [tipo, carX_start, carY_start, angulo, speed, segLen_box2d]
+    //
+    // Angulo:  East=-PI/2  West=PI/2  South=0  North=PI
+    // Velocidade Box2D: vx=-sin(a)*speed, vy=cos(a)*speed
+    // Progresso: dot((pos-start), dir) = -sin(a)*(pos.x-sx) + cos(a)*(pos.y-sy)
+    //
+    // Rua horizontal (Three.js yâ-192):
+    //   Lane Leste:  x 440â580, y=-200  â segLen=14 Box2D
+    //   Lane Oeste:  x 580â440, y=-184  â segLen=14 Box2D
+    // Rua vertical (Three.js xâ512):
+    //   Lane Sul:    y -152â-232, x=504 â segLen=8 Box2D
+    //   Lane Norte:  y -232â-152, x=520 â segLen=8 Box2D
     var defs = [
-        // Lane Leste â vai para leste (East, angle=-PI/2), y=-200
-        [58,  576, 264, -P/2, 7],
-        // Lane Oeste â vai para oeste (West, angle=PI/2),  y=-184
-        [4,   576, 248,  P/2, 7],
-        // Lane Sul â vai para sul (South, angle=0),  x=504
-        [58,  568, 256,    0, 6],
-        // Lane Norte â vai para norte (North, angle=PI), x=520
-        [4,   584, 256,    P, 6],
+        // [tipo, carX, carY, angulo, speed, segLen]
+        [58,  504, 264, -P/2, 8, 14],   // Leste: Three.js (440,-200) â (580,-200)
+        [4,   644, 248,  P/2, 8, 14],   // Oeste: Three.js (580,-184) â (440,-184)
+        [58,  568, 216,    0, 7,  8],   // Sul:   Three.js (504,-152) â (504,-232)
+        [4,   584, 296,    P, 7,  8],   // Norte: Three.js (520,-232) â (520,-152)
     ];
 
     defs.forEach(function(d) {
@@ -41,32 +49,28 @@ GTA.spawnAICars = function ( game ) {
             c.addCar(game, d[0], d[1], d[2], 128, 0);
             c.initPhysics(game);
 
-            // Pega posicao Box2D real
             var physPos = c.physics.GetPosition();
 
-            // Adiciona sprite DIRETO na cena (visivel sem depender de secao)
+            // Sprite DIRETO na cena (sem depender de secao)
             c.sprite.position.x = physPos.x * 10 - 32;
             c.sprite.position.y = -physPos.y * 10 + 32;
             c.sprite.position.z = 128;
             game.scene.add(c.sprite);
 
-            // Kinematico: nao colide com outros carros nem edificios
+            // Kinematico: nao colide com edificios nem com outros carros IA
             c.physics.SetType(Box2D.Dynamics.b2Body.b2_kinematicBody);
 
-            // Dados de IA: loop unidirecional
-            // Raio 2.5 Box2D = 25 Three.js (< metade do bloco = 32)
             c._ai = {
-                active: true,
-                angle:  d[3],
-                speed:  d[4],
-                radius: 2.5,
-                startX: physPos.x,
-                startY: physPos.y
+                active:    true,
+                angle:     d[3],
+                speed:     d[4],
+                segLen:    d[5],
+                startX:    physPos.x,
+                startY:    physPos.y,
+                hideTimer: 0          // timer para esconder sprite no teleporte
             };
 
-            // Apenas GTA.allCars (nao activeObjects):
-            // activeObjects e sincronizado por physics.updateWorld (formula errada);
-            // GTA.allCars e sincronizado pelo loop do render (formula correta).
+            // Apenas GTA.allCars â physics.updateWorld usa formula errada para IA
             GTA.allCars.push(c);
 
         } catch(e) {
@@ -83,21 +87,38 @@ GTA.updateAICars = function ( delta ) {
     GTA.allCars.forEach(function(car) {
         if (!car || !car._ai || !car._ai.active) return;
         var ai  = car._ai;
+
+        // Teleporte invisivel: esconde sprite por 50 ms
+        if (ai.hideTimer > 0) {
+            ai.hideTimer -= delta;
+            if (ai.hideTimer <= 0) {
+                ai.hideTimer = 0;
+                if (car.sprite) car.sprite.visible = true;
+            }
+            return; // nao move enquanto teleportando
+        }
+
         var pos = car.physics.GetPosition();
         var dx  = pos.x - ai.startX;
         var dy  = pos.y - ai.startY;
 
-        // Quando atinge o raio: teleporta ao inicio e reinicia na mesma direcao
-        if (Math.sqrt(dx * dx + dy * dy) > ai.radius) {
+        // Progresso ao longo da direcao da lane
+        var progress = -Math.sin(ai.angle) * dx + Math.cos(ai.angle) * dy;
+
+        if (progress > ai.segLen) {
+            // Fim do segmento: teleporta ao inicio e esconde brevemente
             car.physics.SetPosition(
                 new Box2D.Common.Math.b2Vec2(ai.startX, ai.startY)
             );
             car.physics.SetLinearVelocity(
                 new Box2D.Common.Math.b2Vec2(0, 0)
             );
+            if (car.sprite) car.sprite.visible = false;
+            ai.hideTimer = 0.05; // 50 ms invisivel
+            return;
         }
 
-        // Mantem velocidade/angulo constantes (movimento unidirecional na pista)
+        // Movimento unidirecional constante na lane
         var a = ai.angle;
         car.physics.SetLinearVelocity(
             new Box2D.Common.Math.b2Vec2(
