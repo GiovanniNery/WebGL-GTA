@@ -320,7 +320,7 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         }
 
         if (this.sprite) {
-            this.sprite.rotation.z = -(this._aiAngle - Math.PI / 2);
+            this.sprite.rotation.z = this._aiAngle + Math.PI / 2;
         }
 
     } catch(e) {
