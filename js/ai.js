@@ -112,8 +112,9 @@ GTA.spawnAICars = function ( game ) {
         passes++;
         var a = GTA._aiPass(game);
         if (a === 0) idle++; else idle = 0;
-        if (idle >= 6 || passes >= 60 || GTA.aiCarsPath.length >= 90) { clearInterval(GTA._aiInterval); GTA._aiInterval = null; }
-    }, 3500);
+        // mapa carrega em partes; so para quando ficar muito tempo sem novas regioes
+        if (idle >= 25 || passes >= 90 || GTA.aiCarsPath.length >= 90) { clearInterval(GTA._aiInterval); GTA._aiInterval = null; }
+    }, 4000);
     GTA.Log('AI: gerador de trafego iniciado');
 };
 
