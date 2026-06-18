@@ -38,15 +38,21 @@ GTA._placeAICar = function ( car ) {
     car.sprite.position.x = seg.x0 + seg.dx * t;
     car.sprite.position.y = seg.y0 + seg.dy * t;
     // sprite aponta p/ Norte (rot=0); ang=0 é Leste → rot = ang - PI/2
-    car.sprite.rotation.z = seg.ang - Math.PI / 2;
+    car.sprite.rotation.z = seg.ang + Math.PI / 2;
 };
 
 GTA.spawnAICars = function ( game ) {
     var routes = [
-        { type: 58, speed: 90, pts: [[352,-900],[352,-320],[904,-320]] },           // sobe rua esq. e vira p/ Leste
-        { type:  4, speed: 90, pts: [[904,-224],[256,-224],[224,-360],[224,-900]] }, // vem do Leste e vira p/ Sul
-        { type: 58, speed: 80, pts: [[168,-384],[920,-384]] },                       // avenida reto (Leste)
-        { type:  4, speed: 80, pts: [[160,-288],[256,-288],[288,-360],[288,-900]] }  // entra pela avenida e vira p/ Sul
+        // A — sobe a rua vertical e vira p/ Leste na avenida (modelos variados)
+        { type: 58, speed: 85, pts: [[384,-900],[384,-320],[925,-320]] },
+        { type: 13, speed: 95, pts: [[336,-900],[336,-352],[925,-352]] },
+        { type: 41, speed: 80, pts: [[384,-900],[384,-384],[925,-384]] },
+        { type: 29, speed: 90, pts: [[336,-900],[336,-288],[925,-288]] },
+        // B — vem do Leste pela avenida e vira p/ Sul na rua vertical
+        { type: 17, speed: 85, pts: [[925,-208],[224,-208],[224,-900]] },
+        { type: 70, speed: 95, pts: [[925,-240],[272,-240],[272,-900]] },
+        { type: 80, speed: 80, pts: [[925,-272],[224,-272],[224,-900]] },
+        { type: 46, speed: 90, pts: [[925,-304],[272,-304],[272,-900]] }
     ];
 
     routes.forEach(function ( rt, idx ) {
