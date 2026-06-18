@@ -29,41 +29,48 @@ GTA.spawnAICars = function ( game ) {
     //   Oeste  â faixa norte y=-176, de x=590 a x=430
     //   Sul    â faixa oeste x=496,  de y=-152 a y=-248
     //   Norte  â faixa leste x=528,  de y=-248 a y=-152
+    // [tipo, startX, startY, endX, endY, rotZ, speed(px/s)]
+    // Regra GTA1: trÃ¡fego pela direita
+    //   Leste  â faixa sul   y=-208, de x=380 a x=640
+    //   Oeste  â faixa norte y=-176, de x=640 a x=380
+    //   Sul    â faixa oeste x=496,  de y=-120 a y=-280
+    //   Norte  â faixa leste x=528,  de y=-280 a y=-120
     var routes = [
-        [58,  430, -208,  590, -208, -P/2,  80],   // Leste
-        [ 4,  590, -176,  430, -176,  P/2,  80],   // Oeste
-        [58,  496, -152,  496, -248,   P,   60],   // Sul
-        [ 4,  528, -248,  528, -152,   0,   60],   // Norte
+        [58,  380, -208,  640, -208, -P/2,  80],   // Leste  (260px / 80px/s = 3.25s)
+        [ 4,  640, -176,  380, -176,  P/2,  80],   // Oeste
+        [58,  496, -120,  496, -280,   P,   60],   // Sul    (160px / 60px/s = 2.67s)
+        [ 4,  528, -280,  528, -120,   0,   60],   // Norte
     ];
 
-    routes.forEach(function (r) {
+    routes.forEach(function (r, idx) {
         try {
             var c = new GTA.GameObjectPosition();
-            // addCar(game, type, carX, carY, z, angle)
-            // carX/carY sÃ£o coords internas; position Ã© sobrescrito logo abaixo
             c.addCar(game, r[0], 64, 64, 128, 0);
 
-            c.sprite.position.x = r[1];
-            c.sprite.position.y = r[2];
+            var dx = r[3] - r[1];
+            var dy = r[4] - r[2];
+            var totalDist = Math.sqrt(dx * dx + dy * dy);
+
+            // Escalonar: cada carro comeÃ§a em 1/4 da rota para nunca sincronizarem
+            var initialProgress = (idx / routes.length) * totalDist;
+
+            c.sprite.position.x = r[1] + dx * (initialProgress / totalDist);
+            c.sprite.position.y = r[2] + dy * (initialProgress / totalDist);
             c.sprite.position.z = 128;
             c.sprite.rotation.z = r[5];
             game.scene.add(c.sprite);
 
-            var dx = r[3] - r[1];
-            var dy = r[4] - r[2];
             c._path = {
-                startX:   r[1],
-                startY:   r[2],
-                endX:     r[3],
-                endY:     r[4],
-                rot:      r[5],
-                speed:    r[6],
-                dx:       dx,
-                dy:       dy,
-                totalDist: Math.sqrt(dx * dx + dy * dy),
-                progress: 0,
-                hiding:   false,
-                hideTimer: 0,
+                startX:    r[1],
+                startY:    r[2],
+                endX:      r[3],
+                endY:      r[4],
+                rot:       r[5],
+                speed:     r[6],
+                dx:        dx,
+                dy:        dy,
+                totalDist: totalDist,
+                progress:  initialProgress,
                 _dmgCooldown: 0
             };
 
@@ -82,28 +89,12 @@ GTA.updateAICars = function ( delta ) {
     GTA.aiCarsPath.forEach(function (car) {
         var p = car._path;
 
-        // ââ Reaparecer depois de loop âââââââââââââââââââââââââ
-        if (p.hiding) {
-            p.hideTimer -= delta;
-            if (p.hideTimer <= 0) {
-                p.hiding = false;
-                p.progress = 0;
-                car.sprite.position.x = p.startX;
-                car.sprite.position.y = p.startY;
-                car.sprite.visible = true;
-            }
-            return;
-        }
-
         // ââ AvanÃ§ar na rota âââââââââââââââââââââââââââââââââââ
         p.progress += p.speed * delta;
 
         if (p.progress >= p.totalDist) {
-            // Chegou ao fim â desaparece por 1 s e reinicia
-            car.sprite.visible = false;
-            p.hiding = true;
-            p.hideTimer = 1.0;
-            return;
+            // Chegou ao fim â reinicia imediatamente sem pausa
+            p.progress = 0;
         }
 
         var t = p.progress / p.totalDist;
