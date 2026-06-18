@@ -9,6 +9,9 @@
  * Para exibir em Three.js (tx, ty):
  *   bx = (tx + 32) / 10  â  carX = tx + 64   (tipo 58/4, h=64)
  *   by = (32 - ty) / 10  â  carY = 64 - ty    (tipo 58/4, h=64)
+ *
+ * Via de 64 units de largura centrada em y=-192 (horizontal) e x=512 (vertical):
+ *   Lane offset = 16 units â faixas em y=-208/-176 e x=496/528
  */
 
 // âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
@@ -19,28 +22,30 @@ GTA.spawnAICars = function ( game ) {
 
     var P = Math.PI;
 
-    // Carros em segmentos de rua reais perto do player (512, -192).
-    // carX = tx + 64,  carY = 64 - ty   (tipo 58/4, height=64)
+    // Faixas centradas na via (offset 16 units do centro):
+    //   Via horizontal centrada em y=-192: faixas em y=-208 (leste) e y=-176 (oeste)
+    //   Via vertical   centrada em x=512:  faixas em x=496  (sul)   e x=528  (norte)
     //
-    // Cada carro tem inicio e fim do segmento:
-    //   [tipo, carX_start, carY_start, angulo, speed, segLen_box2d]
+    // ConversÃ£o: carX = tx+64, carY = 64-ty
+    //   y=-208 â carY=272   y=-176 â carY=240
+    //   x=496  â carX=560   x=528  â carX=592
     //
-    // Angulo:  East=-PI/2  West=PI/2  South=0  North=PI
+    // Angulo: East=-PI/2  West=PI/2  South=0  North=PI
     // Velocidade Box2D: vx=-sin(a)*speed, vy=cos(a)*speed
-    // Progresso: dot((pos-start), dir) = -sin(a)*(pos.x-sx) + cos(a)*(pos.y-sy)
+    // Progresso: -sin(a)*(pos.x-sx) + cos(a)*(pos.y-sy)
     //
-    // Rua horizontal (Three.js yâ-192):
-    //   Lane Leste:  x 440â580, y=-200  â segLen=14 Box2D
-    //   Lane Oeste:  x 580â440, y=-184  â segLen=14 Box2D
-    // Rua vertical (Three.js xâ512):
-    //   Lane Sul:    y -152â-232, x=504 â segLen=8 Box2D
-    //   Lane Norte:  y -232â-152, x=520 â segLen=8 Box2D
+    // Via horizontal (segLen=14 Box2D = 140 Three.js units, x de 440 a 580):
+    //   Lane Leste (ty=-208): carX_start=504, carY=272
+    //   Lane Oeste (ty=-176): carX_start=644, carY=240
+    // Via vertical (segLen=8 Box2D = 80 Three.js units, y de -152 a -232):
+    //   Lane Sul  (tx=496): carX=560, carY_start=216
+    //   Lane Norte(tx=528): carX=592, carY_start=296
     var defs = [
         // [tipo, carX, carY, angulo, speed, segLen]
-        [58,  504, 264, -P/2, 8, 14],   // Leste: Three.js (440,-200) â (580,-200)
-        [4,   644, 248,  P/2, 8, 14],   // Oeste: Three.js (580,-184) â (440,-184)
-        [58,  568, 216,    0, 7,  8],   // Sul:   Three.js (504,-152) â (504,-232)
-        [4,   584, 296,    P, 7,  8],   // Norte: Three.js (520,-232) â (520,-152)
+        [58,  504, 272, -P/2, 8, 14],   // Leste: ty=-208, x 440â580
+        [4,   644, 240,  P/2, 8, 14],   // Oeste: ty=-176, x 580â440
+        [58,  560, 216,    0, 7,  8],   // Sul:   tx=496,  y -152â-232
+        [4,   592, 296,    P, 7,  8],   // Norte: tx=528,  y -232â-152
     ];
 
     defs.forEach(function(d) {
@@ -67,10 +72,9 @@ GTA.spawnAICars = function ( game ) {
                 segLen:    d[5],
                 startX:    physPos.x,
                 startY:    physPos.y,
-                hideTimer: 0          // timer para esconder sprite no teleporte
+                hideTimer: 0
             };
 
-            // Apenas GTA.allCars â physics.updateWorld usa formula errada para IA
             GTA.allCars.push(c);
 
         } catch(e) {
@@ -95,7 +99,7 @@ GTA.updateAICars = function ( delta ) {
                 ai.hideTimer = 0;
                 if (car.sprite) car.sprite.visible = true;
             }
-            return; // nao move enquanto teleportando
+            return;
         }
 
         var pos = car.physics.GetPosition();
@@ -106,7 +110,6 @@ GTA.updateAICars = function ( delta ) {
         var progress = -Math.sin(ai.angle) * dx + Math.cos(ai.angle) * dy;
 
         if (progress > ai.segLen) {
-            // Fim do segmento: teleporta ao inicio e esconde brevemente
             car.physics.SetPosition(
                 new Box2D.Common.Math.b2Vec2(ai.startX, ai.startY)
             );
@@ -114,7 +117,7 @@ GTA.updateAICars = function ( delta ) {
                 new Box2D.Common.Math.b2Vec2(0, 0)
             );
             if (car.sprite) car.sprite.visible = false;
-            ai.hideTimer = 0.05; // 50 ms invisivel
+            ai.hideTimer = 0.05;
             return;
         }
 
@@ -138,7 +141,6 @@ GTA.updateAICars = function ( delta ) {
             var _cdy = _pl.position.y - car.sprite.position.y;
             var _cdist = Math.sqrt(_cdx * _cdx + _cdy * _cdy);
             if (_cdist < 55) {
-                // Cooldown de 1.5s para nÃ£o tirar toda a vida de uma vez
                 if (!ai._dmgCooldown || ai._dmgCooldown <= 0) {
                     if (typeof window.GTA_health !== 'undefined') {
                         window.GTA_health = Math.max(0, window.GTA_health - 1);
@@ -181,8 +183,7 @@ GTA.spawnAIPedestrians = function ( game ) {
     }
 
     // Calcadas ao redor do player (512, -192).
-    // Confirmadas pelos pickups em index.html (norte y=-140, sul y=-270,
-    // oeste x=416, leste x=608).
+    // Confirmadas pelos pickups (norte y=-140, sul y=-270, oeste x=416, leste x=608).
     var positions = [
         [448, -145],   // calcada norte-oeste
         [512, -142],   // calcada norte-centro
@@ -234,17 +235,45 @@ GTA.AIPedestrian = function ( game, worldX, worldY, pedOffset ) {
     this.position.y = worldY;
     this.position.z = 128;
 
+    // ââ Eixo de patrulha âââââââââââââââââââââââââââââââââââââ
+    // CalÃ§adas E/O (xâ416 ou xâ608, >70 units do centro x=512): andam em Y
+    // CalÃ§adas N/S (yâ-144 ou yâ-263): andam em X
+    var dxFromCenterX = Math.abs(worldX - 512);
+    this._patrolAxis = (dxFromCenterX > 70) ? 'y' : 'x';
+
+    // Ãngulo inicial sempre ao longo do eixo de patrulha
+    if (this._patrolAxis === 'x') {
+        this._aiAngle = (Math.random() < 0.5) ? 0 : Math.PI;               // Leste ou Oeste
+    } else {
+        this._aiAngle = (Math.random() < 0.5) ? Math.PI / 2 : -Math.PI / 2; // Norte ou Sul
+    }
+
     this._aiTimer    = Math.random() * 3;
     this._aiInterval = 2 + Math.random() * 4;
-    this._aiAngle    = Math.random() * Math.PI * 2;
     this._stopped    = false;
     this._stopTimer  = 0;
     this._speed      = 25 + Math.random() * 20;
+    this._fleeSpd    = 0;
 
-    // Origem e limite: 40 units â fica na calcada, nao entra na rua
     this._originX = worldX;
     this._originY = worldY;
-    this._maxDist  = 40;
+    this._maxDist  = 50;  // raio maximo na calcada
+
+    // ââ AnimaÃ§Ã£o de walking âââââââââââââââââââââââââââââââââââ
+    this.lastframe   = 0;
+    this.spriteframe = 0;
+    this.spriteAnimator = null;
+    try {
+        // registerAnimations seta animationSprites[1] = [offset+0, 7 frames, 0.1s]
+        GTA.Pedestrian.prototype.registerAnimations.call(this, pedOffset);
+        this.spriteAnimator = new GTA.SpriteAnimation(
+            game,
+            this.animationSprites[1][0],
+            this.sprite
+        );
+    } catch(e) {
+        GTA.Log('AI anim init error: ' + e.message);
+    }
 
     game.scene.add(this);
 };
@@ -270,8 +299,8 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
                     this.position.x - _pl.position.x
                 );
                 this._stopped  = false;
-                this._fleeSpd  = this._speed * 2.0;  // corre mais rÃ¡pido
-                this._aiTimer  = 0;                  // reseta timer para nÃ£o mudar direÃ§Ã£o tÃ£o cedo
+                this._fleeSpd  = this._speed * 2.0;
+                this._aiTimer  = 0;
                 _fleeing = true;
             }
         }
@@ -294,16 +323,21 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
                     this._stopped   = true;
                     this._stopTimer = 1 + Math.random() * 2;
                 } else if (dist > this._maxDist) {
-                    // Volta para a calcada de origem
+                    // Volta para a calcada de origem ao longo do eixo
                     this._stopped = false;
-                    this._aiAngle = Math.atan2(
-                        this._originY - this.position.y,
-                        this._originX - this.position.x
-                    );
+                    if (this._patrolAxis === 'x') {
+                        this._aiAngle = (this._originX > this.position.x) ? 0 : Math.PI;
+                    } else {
+                        this._aiAngle = (this._originY > this.position.y) ? Math.PI / 2 : -Math.PI / 2;
+                    }
                 } else {
-                    // Muda direÃ§Ã£o aleatÃ³ria
+                    // Muda direÃ§Ã£o â sempre ao longo do eixo de patrulha
                     this._stopped = false;
-                    this._aiAngle = Math.random() * Math.PI * 2;
+                    if (this._patrolAxis === 'x') {
+                        this._aiAngle = (Math.random() < 0.5) ? 0 : Math.PI;
+                    } else {
+                        this._aiAngle = (Math.random() < 0.5) ? Math.PI / 2 : -Math.PI / 2;
+                    }
                 }
             }
 
@@ -319,8 +353,31 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
             this.position.y += Math.sin(this._aiAngle) * spd;
         }
 
+        // ââ RotaÃ§Ã£o do sprite âââââââââââââââââââââââââââââââââ
         if (this.sprite) {
             this.sprite.rotation.z = this._aiAngle + Math.PI / 2;
+        }
+
+        // ââ AnimaÃ§Ã£o de walking (cicla 7 frames) ââââââââââââââ
+        if (this.spriteAnimator && this.animationSprites) {
+            var walkAnim = this.animationSprites[1]; // [baseFrame, 7, 0.1]
+            if (!this._stopped) {
+                this.lastframe += delta;
+                if (this.lastframe >= walkAnim[2]) {
+                    this.lastframe = 0;
+                    this.spriteframe = (this.spriteframe + 1) % walkAnim[1];
+                    try {
+                        this.spriteAnimator.setSprite(walkAnim[0] + this.spriteframe);
+                    } catch(e) {}
+                }
+            } else {
+                // Parado: frame estatico de standing (animationSprites[0])
+                try {
+                    this.spriteAnimator.setSprite(this.animationSprites[0][0]);
+                } catch(e) {}
+                this.spriteframe = 0;
+                this.lastframe   = 0;
+            }
         }
 
     } catch(e) {
