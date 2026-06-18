@@ -18,9 +18,9 @@ GTA._aiUsedBuckets = GTA._aiUsedBuckets || {};
 GTA._aiStarted = GTA._aiStarted || false;
 
 // === CARROS IA — tráfego em volta do PLAYER (segue a câmera) ===
-// A cada pass: recicla carros distantes e gera circuitos numa janela ao redor
-// do player. Anel = volta no quarteirão (sem ré, sem sumir). Rua longa = as
-// pontas entram no prédio (volta escondida). 2 carros por circuito. So modelos limpos.
+// Anel = volta no quarteirão (so se o interior for predio). Rua longa = anda no
+// EIXO LONGO da rua (senao atravessa) e as pontas entram no predio. 2 carros por
+// circuito, recicla os distantes, so modelos limpos. Rotacao = heading + PI/2.
 
 GTA._aiTopType = function ( base, c, r ) {
     var col = base[c]; if (!col) return -1;
@@ -62,10 +62,11 @@ GTA._aiPass = function ( game ) {
     var WIN = 22, REG = 8, MAX = 70, CARS_PER = 2, RECYCLE = 4200;
     var base = game.map.base, used = GTA._aiUsedBuckets;
     var cam = game.camera.position, cx = cam.x, cy = cam.y;
-    // recicla carros distantes do player (libera a regiao p/ novos)
     for (var i = GTA.aiCarsPath.length - 1; i >= 0; i--) { var c = GTA.aiCarsPath[i]; var dx = c.sprite.position.x - cx, dy = c.sprite.position.y - cy; if (Math.sqrt(dx*dx+dy*dy) > RECYCLE) { try { game.scene.remove(c.sprite); } catch (e) {} if (c._bk) delete used[c._bk]; GTA.aiCarsPath.splice(i, 1); } }
     function road(cc, rr) { return GTA._aiTopType(base, cc, rr) === 2; }
     function wt(x, y) { return GTA._aiTopType(base, Math.round(x/64), -Math.round(y/64)); }
+    function widthX(c, r) { var n = 1, k = c-1; while (road(k,r)) { n++; k--; } k = c+1; while (road(k,r)) { n++; k++; } return n; }
+    function heightY(c, r) { var n = 1, k = r-1; while (road(c,k)) { n++; k--; } k = r+1; while (road(c,k)) { n++; k++; } return n; }
     function valid(pts) { for (var s = 0; s < pts.length - 1; s++) { var x0 = pts[s][0], y0 = pts[s][1], x1 = pts[s+1][0], y1 = pts[s+1][1], dx = x1-x0, dy = y1-y0, len = Math.sqrt(dx*dx+dy*dy); if (len < 1) continue; var ux = dx/len, uy = dy/len, px = -uy, py = ux, st = Math.max(2, Math.round(len/18)); for (var i = 0; i <= st; i++) { var t = i/st, x = x0+dx*t, y = y0+dy*t; if (wt(x+px*26,y+py*26)!==2 || wt(x-px*26,y-py*26)!==2 || wt(x,y)!==2) return false; } } return true; }
     var rc = Math.round(cx/64), rr0 = -Math.round(cy/64);
     var C0 = Math.max(3, rc-WIN), C1 = Math.min(251, rc+WIN), R0 = Math.max(3, rr0-WIN), R1 = Math.min(252, rr0+WIN);
@@ -75,9 +76,12 @@ GTA._aiPass = function ( game ) {
     function bk(r, c) { return Math.floor(r/REG) + '_' + Math.floor(c/REG); }
     function emit(pts, key) { if (GTA.aiCarsPath.length >= MAX) return; for (var m = 0; m < CARS_PER; m++) { if (GTA.aiCarsPath.length >= MAX) break; GTA._aiMk(game, pts, CLEAN, m/CARS_PER, key); } used[key] = 1; }
     var added = 0;
-    for (var i2 = 0; i2 < H.length; i2++) { if (GTA.aiCarsPath.length >= MAX) break; var a = H[i2]; for (var j = 0; j < H.length; j++) { var b = H[j]; var gap = b.r - a.r; if (gap < 4 || gap > 14) continue; var ovL = Math.max(a.c0,b.c0), ovR = Math.min(a.c1,b.c1); if (ovR-ovL < 4) continue; var sides = []; for (var k = 0; k < V.length; k++) { var v = V[k]; if (v.c>=ovL && v.c<=ovR && v.r0<=a.r && v.r1>=b.r) sides.push(v.c); } if (sides.length < 2) continue; var cL = Math.min.apply(0,sides), cR = Math.max.apply(0,sides); if (cR-cL < 4 || cR-cL > 14) continue; var key = bk(a.r, (cL+cR)/2); if (used[key]) continue; var tY = -(64*a.r+32), bY = -(64*b.r+32), lX = 64*cL+32, rX = 64*cR+32; var ring = [[lX,tY],[rX,tY],[rX,bY],[lX,bY],[lX,tY]]; if (valid(ring)) { emit(ring, key); added++; } } }
+    for (var i2 = 0; i2 < H.length; i2++) { if (GTA.aiCarsPath.length >= MAX) break; var a = H[i2]; for (var j = 0; j < H.length; j++) { var b = H[j]; var gap = b.r - a.r; if (gap < 4 || gap > 14) continue; var ovL = Math.max(a.c0,b.c0), ovR = Math.min(a.c1,b.c1); if (ovR-ovL < 4) continue; var sides = []; for (var k = 0; k < V.length; k++) { var v = V[k]; if (v.c>=ovL && v.c<=ovR && v.r0<=a.r && v.r1>=b.r) sides.push(v.c); } if (sides.length < 2) continue; var cL = Math.min.apply(0,sides), cR = Math.max.apply(0,sides); if (cR-cL < 4 || cR-cL > 14) continue; var midC = Math.round((cL+cR)/2), midR = Math.round((a.r+b.r)/2); if (road(midC, midR)) continue; var key = bk(a.r, (cL+cR)/2); if (used[key]) continue; var tY = -(64*a.r+32), bY = -(64*b.r+32), lX = 64*cL+32, rX = 64*cR+32; var ring = [[lX,tY],[rX,tY],[rX,bY],[lX,bY],[lX,tY]]; if (valid(ring)) { emit(ring, key); added++; } } }
     var cand = []; for (var hi = 0; hi < H.length; hi++) cand.push({ d:'h', r:H[hi].r, a:H[hi].c0, b:H[hi].c1, len:H[hi].len }); for (var vi = 0; vi < V.length; vi++) cand.push({ d:'v', c:V[vi].c, a:V[vi].r0, b:V[vi].r1, len:V[vi].len }); cand.sort(function (x, y) { return y.len - x.len; });
-    for (var s = 0; s < cand.length; s++) { if (GTA.aiCarsPath.length >= MAX) break; var q = cand[s]; if (q.len < 6) continue; var key, mid, pts; if (q.d === 'h') { key = bk(q.r, (q.a+q.b)/2); if (used[key]) continue; var y = -(64*q.r+32); mid = [[64*q.a, y],[64*q.b, y]]; pts = [[64*(q.a-1), y],[64*(q.b+1), y]]; } else { key = bk((q.a+q.b)/2, q.c); if (used[key]) continue; var x = 64*q.c+32; mid = [[x, -(64*q.a)],[x, -(64*q.b)]]; pts = [[x, -(64*(q.a-1))],[x, -(64*(q.b+1))]]; } if (valid(mid)) { emit(pts, key); added++; } }
+    for (var s = 0; s < cand.length; s++) { if (GTA.aiCarsPath.length >= MAX) break; var q = cand[s]; if (q.len < 6) continue; var key, mid, pts;
+        if (q.d === 'h') { var cm = Math.round((q.a+q.b)/2); if (!(widthX(cm,q.r) > heightY(cm,q.r))) continue; key = bk(q.r, (q.a+q.b)/2); if (used[key]) continue; var y = -(64*q.r+32); mid = [[64*q.a, y],[64*q.b, y]]; pts = [[64*(q.a-1), y],[64*(q.b+1), y]]; }
+        else { var rm = Math.round((q.a+q.b)/2); if (!(heightY(q.c,rm) > widthX(q.c,rm))) continue; key = bk((q.a+q.b)/2, q.c); if (used[key]) continue; var x = 64*q.c+32; mid = [[x, -(64*q.a)],[x, -(64*q.b)]]; pts = [[x, -(64*(q.a-1))],[x, -(64*(q.b+1))]]; }
+        if (valid(mid)) { emit(pts, key); added++; } }
     return added;
 };
 
@@ -99,8 +103,6 @@ GTA.updateAICars = function ( delta ) {
     });
 };
 
-// Boot robusto: tenta ate jogo/mapa/sprites prontos, spawna pedestres e inicia
-// o gerador. A geracao segue a camera, entao os carros aparecem onde o player esta.
 GTA._aiBoot = function () {
     var g = window._gtaGame;
     var ready = g && g.scene && g.camera && g.map && g.map.base && g.cars && g.cars[58] && g.sprites && g.spriteNumbers && g.sprites[g.spriteNumbers.offset.PED];
