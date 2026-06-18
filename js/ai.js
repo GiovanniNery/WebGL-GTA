@@ -15,59 +15,65 @@
 // Armazena carros IA separados de GTA.allCars (que Ã© do player)
 GTA.aiCarsPath = GTA.aiCarsPath || [];
 
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// CARROS IA  â  movimento direto em Three.js, sem Box2D
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── CARROS IA — seguem o traçado real das ruas (asfalto) com curvas ───
+// Cada rota é uma polilinha de waypoints [x,y]; o carro percorre os segmentos
+// e ao fim teleporta para o início (os pontos extremos ficam fora da tela).
+// Mapa real: avenida horizontal (rows 3-6) + rua vertical esq. (cols 3-6).
+// type = sprite do carro; speed em px/s. Rotação derivada da direção do segmento.
+
+GTA._placeAICar = function ( car ) {
+    var p = car._path;
+    var d = p.progress % p.total;
+    if (d < 0) d += p.total;
+    var acc = 0, seg = p.segs[0], t = 0;
+    for (var i = 0; i < p.segs.length; i++) {
+        if (d <= acc + p.segs[i].len || i === p.segs.length - 1) {
+            seg = p.segs[i];
+            t = seg.len > 0 ? (d - acc) / seg.len : 0;
+            break;
+        }
+        acc += p.segs[i].len;
+    }
+    if (t < 0) t = 0; if (t > 1) t = 1;
+    car.sprite.position.x = seg.x0 + seg.dx * t;
+    car.sprite.position.y = seg.y0 + seg.dy * t;
+    // sprite aponta p/ Norte (rot=0); ang=0 é Leste → rot = ang - PI/2
+    car.sprite.rotation.z = seg.ang - Math.PI / 2;
+};
 
 GTA.spawnAICars = function ( game ) {
-
-    var P = Math.PI;
-
-    // Rotas estendidas para alÃ©m da tela (x<100 ou x>900, y>-50 ou y<-380)
-    // â teleporte progress=0 ocorre fora do campo de visÃ£o, invisÃ­vel ao player
-    // Camera segue player em xâ512, yâ-192; FOV=45, z=400 â visÃ­vel â x[112..912], y[-592..192]
-    // [tipo, startX, startY, endX, endY, rotZ, speed(px/s)]
     var routes = [
-        [58,  168, -224,  920, -224, -P/2,  90],  // Leste  (avenida horizontal)
-        [ 4,  920, -288,  168, -288,  P/2,  90],  // Oeste  (avenida horizontal)
-        [58,  224, -176,  224, -660,   P,   70],  // Sul    (rua vertical x~224)
-        [ 4,  352, -660,  352, -176,   0,   70],  // Norte  (rua vertical x~352)
+        { type: 58, speed: 90, pts: [[352,-900],[352,-320],[904,-320]] },           // sobe rua esq. e vira p/ Leste
+        { type:  4, speed: 90, pts: [[904,-224],[256,-224],[224,-360],[224,-900]] }, // vem do Leste e vira p/ Sul
+        { type: 58, speed: 80, pts: [[168,-384],[920,-384]] },                       // avenida reto (Leste)
+        { type:  4, speed: 80, pts: [[160,-288],[256,-288],[288,-360],[288,-900]] }  // entra pela avenida e vira p/ Sul
     ];
 
-    routes.forEach(function (r, idx) {
+    routes.forEach(function ( rt, idx ) {
         try {
             var c = new GTA.GameObjectPosition();
-            c.addCar(game, r[0], 64, 64, 128, 0);
+            c.addCar(game, rt.type, 64, 64, 128, 0);
 
-            var dx = r[3] - r[1];
-            var dy = r[4] - r[2];
-            var totalDist = Math.sqrt(dx * dx + dy * dy);
-
-            // Escalonar: cada carro comeÃ§a em 1/4 da rota para nunca sincronizarem
-            var initialProgress = (idx / routes.length) * totalDist;
-
-            c.sprite.position.x = r[1] + dx * (initialProgress / totalDist);
-            c.sprite.position.y = r[2] + dy * (initialProgress / totalDist);
-            c.sprite.position.z = 128 + idx * 2;  // z ligeiramente diferente evita z-fighting
-            c.sprite.rotation.z = r[5];
-            game.scene.add(c.sprite);
+            var pts = rt.pts, segs = [], total = 0;
+            for (var i = 0; i < pts.length - 1; i++) {
+                var dx = pts[i+1][0] - pts[i][0];
+                var dy = pts[i+1][1] - pts[i][1];
+                var len = Math.sqrt(dx*dx + dy*dy);
+                segs.push({ x0: pts[i][0], y0: pts[i][1], dx: dx, dy: dy, len: len, ang: Math.atan2(dy, dx) });
+                total += len;
+            }
 
             c._path = {
-                startX:    r[1],
-                startY:    r[2],
-                endX:      r[3],
-                endY:      r[4],
-                rot:       r[5],
-                speed:     r[6],
-                dx:        dx,
-                dy:        dy,
-                totalDist: totalDist,
-                progress:  initialProgress,
+                pts: pts, segs: segs, total: total,
+                speed: rt.speed,
+                progress: (idx / routes.length) * total,
                 _dmgCooldown: 0
             };
 
+            GTA._placeAICar(c);
+            c.sprite.position.z = 128 + idx * 2;
+            game.scene.add(c.sprite);
             GTA.aiCarsPath.push(c);
-
         } catch (e) {
             GTA.Log('AI car spawn error: ' + e.message);
         }
@@ -76,33 +82,24 @@ GTA.spawnAICars = function ( game ) {
     GTA.Log('AI: spawnAICars done (' + routes.length + ' carros)');
 };
 
-// Chamado a cada frame por core.js
 GTA.updateAICars = function ( delta ) {
-    GTA.aiCarsPath.forEach(function (car) {
+    GTA.aiCarsPath.forEach(function ( car ) {
         var p = car._path;
 
-        // ââ AvanÃ§ar na rota âââââââââââââââââââââââââââââââââââ
         p.progress += p.speed * delta;
+        if (p.progress >= p.total) p.progress -= p.total;
 
-        if (p.progress >= p.totalDist) {
-            // Chegou ao fim â reinicia imediatamente sem pausa
-            p.progress = 0;
-        }
+        GTA._placeAICar(car);
 
-        var t = p.progress / p.totalDist;
-        car.sprite.position.x = p.startX + p.dx * t;
-        car.sprite.position.y = p.startY + p.dy * t;
-
-        // ââ ColisÃ£o com player a pÃ© âââââââââââââââââââââââââââ
         var _game = window._gtaGame;
         if (_game && _game.player && !_game.player.inCar) {
             var _pl = _game.player;
             var _cx = _pl.position.x - car.sprite.position.x;
             var _cy = _pl.position.y - car.sprite.position.y;
-            if (Math.sqrt(_cx * _cx + _cy * _cy) < 50) {
+            if (Math.sqrt(_cx*_cx + _cy*_cy) < 50) {
                 if (!p._dmgCooldown || p._dmgCooldown <= 0) {
                     if (typeof window.GTA_health !== 'undefined') {
-                        window.GTR_health = Math.max(0, window.GTA_health - 1);
+                        window.GTA_health = Math.max(0, window.GTA_health - 1);
                         GTA.Log('Atropelado! Vida: ' + window.GTA_health);
                     }
                     p._dmgCooldown = 1.5;
@@ -112,10 +109,6 @@ GTA.updateAICars = function ( delta ) {
         if (p._dmgCooldown > 0) p._dmgCooldown -= delta;
     });
 };
-
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// PEDESTRES IA
-// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 GTA.spawnAIPedestrians = function ( game ) {
 
