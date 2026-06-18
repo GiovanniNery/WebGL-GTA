@@ -23,23 +23,15 @@ GTA.spawnAICars = function ( game ) {
 
     var P = Math.PI;
 
+    // Rotas estendidas para alÃ©m da tela (x<100 ou x>900, y>-50 ou y<-380)
+    // â teleporte progress=0 ocorre fora do campo de visÃ£o, invisÃ­vel ao player
+    // Camera segue player em xâ512, yâ-192; FOV=45, z=400 â visÃ­vel â x[112..912], y[-592..192]
     // [tipo, startX, startY, endX, endY, rotZ, speed(px/s)]
-    // Regra GTA1: trÃ¡fego pela direita
-    //   Leste  â faixa sul   y=-208, de x=430 a x=590
-    //   Oeste  â faixa norte y=-176, de x=590 a x=430
-    //   Sul    â faixa oeste x=496,  de y=-152 a y=-248
-    //   Norte  â faixa leste x=528,  de y=-248 a y=-152
-    // [tipo, startX, startY, endX, endY, rotZ, speed(px/s)]
-    // Regra GTA1: trÃ¡fego pela direita
-    //   Leste  â faixa sul   y=-208, de x=380 a x=640
-    //   Oeste  â faixa norte y=-176, de x=640 a x=380
-    //   Sul    â faixa oeste x=496,  de y=-120 a y=-280
-    //   Norte  â faixa leste x=528,  de y=-280 a y=-120
     var routes = [
-        [58,  380, -208,  640, -208, -P/2,  80],   // Leste  (260px / 80px/s = 3.25s)
-        [ 4,  640, -176,  380, -176,  P/2,  80],   // Oeste
-        [58,  496, -120,  496, -280,   P,   60],   // Sul    (160px / 60px/s = 2.67s)
-        [ 4,  528, -280,  528, -120,   0,   60],   // Norte
+        [58,   80, -208,  940, -208, -P/2,  90],   // Leste  (860px / 90px/s â 9.6s)
+        [ 4,  940, -176,   80, -176,  P/2,  90],   // Oeste
+        [58,  496,  -40,  496, -390,   P,   70],   // Sul    (350px / 70px/s = 5.0s)
+        [ 4,  528, -390,  528,  -40,   0,   70],   // Norte
     ];
 
     routes.forEach(function (r, idx) {
@@ -56,7 +48,7 @@ GTA.spawnAICars = function ( game ) {
 
             c.sprite.position.x = r[1] + dx * (initialProgress / totalDist);
             c.sprite.position.y = r[2] + dy * (initialProgress / totalDist);
-            c.sprite.position.z = 128;
+            c.sprite.position.z = 128 + idx * 2;  // z ligeiramente diferente evita z-fighting
             c.sprite.rotation.z = r[5];
             game.scene.add(c.sprite);
 
@@ -110,7 +102,7 @@ GTA.updateAICars = function ( delta ) {
             if (Math.sqrt(_cx * _cx + _cy * _cy) < 50) {
                 if (!p._dmgCooldown || p._dmgCooldown <= 0) {
                     if (typeof window.GTA_health !== 'undefined') {
-                        window.GTA_health = Math.max(0, window.GTA_health - 1);
+                        window.GTR_health = Math.max(0, window.GTA_health - 1);
                         GTA.Log('Atropelado! Vida: ' + window.GTA_health);
                     }
                     p._dmgCooldown = 1.5;
