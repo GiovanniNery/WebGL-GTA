@@ -28,10 +28,10 @@ GTA.spawnAICars = function ( game ) {
     // Camera segue player em xâ512, yâ-192; FOV=45, z=400 â visÃ­vel â x[112..912], y[-592..192]
     // [tipo, startX, startY, endX, endY, rotZ, speed(px/s)]
     var routes = [
-        [58,   80, -208,  940, -208, -P/2,  90],   // Leste  (860px / 90px/s â 9.6s)
-        [ 4,  940, -176,   80, -176,  P/2,  90],   // Oeste
-        [58,  496,  -40,  496, -390,   P,   70],   // Sul    (350px / 70px/s = 5.0s)
-        [ 4,  528, -390,  528,  -40,   0,   70],   // Norte
+        [58,  168, -224,  920, -224, -P/2,  90],  // Leste  (avenida horizontal)
+        [ 4,  920, -288,  168, -288,  P/2,  90],  // Oeste  (avenida horizontal)
+        [58,  224, -176,  224, -660,   P,   70],  // Sul    (rua vertical x~224)
+        [ 4,  352, -660,  352, -176,   0,   70],  // Norte  (rua vertical x~352)
     ];
 
     routes.forEach(function (r, idx) {
