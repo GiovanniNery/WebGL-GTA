@@ -102,7 +102,7 @@ GTA.Player.prototype.toggleCar = function () {
 };
 
 GTA.Player.prototype.enterNearestCar = function () {
-    var cars = GTA.allCars;
+    var cars = (GTA.allCars || []).concat(GTA.aiCarsPath || []);
     if (!cars || cars.length === 0) return;
 
     var nearest = null;
@@ -125,6 +125,7 @@ GTA.Player.prototype.enterNearestCar = function () {
     }
 
     if (nearest) {
+        if (!nearest.physics && typeof GTA.disableAICar === 'function') GTA.disableAICar(nearest);
         this.inCar = true;
         this.currentCar = nearest;
         this.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0));
