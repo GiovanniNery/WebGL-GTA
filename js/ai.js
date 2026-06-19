@@ -14,14 +14,16 @@
 
 // Armazena carros IA separados de GTA.allCars (que Ã© do player)
 GTA.aiCarsPath = GTA.aiCarsPath || [];
-GTA._aiUsedBuckets = GTA._aiUsedBuckets || {};
 GTA._aiStarted = GTA._aiStarted || false;
 GTA.allCars = GTA.allCars || [];
 
-// === CARROS IA — tráfego em volta do player; nascem FORA da tela; rouba-veis ===
-// Circuitos (anel/rua no eixo longo) so em regioes nao visiveis (entram dirigindo,
-// nao nascem na sua frente). GTA.disableAICar(car) converte um carro IA em carro
-// dirigivel (Box2D) quando o player rouba. So modelos limpos. Rotacao = heading+PI/2.
+// === TRAFEGO IA — carros vagueiam pelas ruas e viram nos cruzamentos ===
+// Nunca somem (nao teleportam): andam de tile em tile escolhendo ruas, viram
+// nas esquinas, nascem FORA da tela e dirigem na faixa da DIREITA (nao na linha
+// amarela, e sem bater de frente). Recicla os distantes. Roubaveis (disableAICar).
+
+GTA._AI_OFF = 15; // deslocamento p/ a faixa da direita
+GTA._aiClean = [58, 29, 41, 27, 13, 9, 28, 6, 21, 34, 2, 37];
 
 GTA._aiTopType = function ( base, c, r ) {
     var col = base[c]; if (!col) return -1;
@@ -30,94 +32,89 @@ GTA._aiTopType = function ( base, c, r ) {
     return -1;
 };
 
-GTA._placeAICar = function ( car ) {
-    var p = car._path;
-    var d = p.progress % p.total; if (d < 0) d += p.total;
-    var acc = 0, seg = p.segs[0], t = 0;
-    for (var i = 0; i < p.segs.length; i++) {
-        if (d <= acc + p.segs[i].len || i === p.segs.length - 1) { seg = p.segs[i]; t = seg.len > 0 ? (d - acc) / seg.len : 0; break; }
-        acc += p.segs[i].len;
-    }
-    if (t < 0) t = 0; if (t > 1) t = 1;
-    car.sprite.position.x = seg.x0 + seg.dx * t;
-    car.sprite.position.y = seg.y0 + seg.dy * t;
-    car.sprite.rotation.z = seg.ang + Math.PI / 2;
+GTA._wNext = function ( car ) {
+    var base = window._gtaGame.map.base, w = car._w;
+    function road(c, r) { return GTA._aiTopType(base, c, r) === 2; }
+    var col = Math.round(w.px/64), row = -Math.round(w.py/64), d = w.dir;
+    var perp = [[-d[1], d[0]], [d[1], -d[0]]];
+    var straightOk = road(col + d[0], row - d[1]);
+    var turns = perp.filter(function (dd) { return road(col + dd[0], row - dd[1]); });
+    var pick = null;
+    if (straightOk && (turns.length === 0 || Math.random() < 0.72)) pick = d;
+    else if (turns.length) pick = turns[Math.floor(Math.random()*turns.length)];
+    else if (straightOk) pick = d;
+    else { var rev = [-d[0], -d[1]]; if (road(col + rev[0], row - rev[1])) pick = rev; }
+    if (!pick) return false;
+    w.dir = pick; w.tcx = 64*(col + pick[0]); w.tcy = -64*(row - pick[1]); return true;
 };
 
-// Roubar: converte o carro IA (path) em carro dirigivel com fisica Box2D
+GTA._wUpdate = function ( car, delta ) {
+    var w = car._w;
+    var dx = w.tcx - w.px, dy = w.tcy - w.py, d = Math.sqrt(dx*dx + dy*dy);
+    var step = w.speed * delta;
+    if (d <= step || d < 1) { w.px = w.tcx; w.py = w.tcy; if (!GTA._wNext(car)) return false; }
+    else { w.px += dx/d*step; w.py += dy/d*step; }
+    var lr = [w.dir[1], -w.dir[0]];
+    car.sprite.position.x = w.px + lr[0]*GTA._AI_OFF;
+    car.sprite.position.y = w.py + lr[1]*GTA._AI_OFF;
+    car.sprite.rotation.z = Math.atan2(w.dir[1], w.dir[0]) + Math.PI/2;
+    return true;
+};
+
+// Roubar: converte o carro IA em carro DIRIGIVEL (Box2D)
 GTA.disableAICar = function ( car ) {
     var i = GTA.aiCarsPath.indexOf(car); if (i >= 0) GTA.aiCarsPath.splice(i, 1);
-    if (car._bk && GTA._aiUsedBuckets) delete GTA._aiUsedBuckets[car._bk];
     if (!car.physics) {
         try {
-            car.x = car.sprite.position.x + 64;
-            car.y = 64 - car.sprite.position.y;
-            car.z = 128;
-            car.rotation = car.sprite.rotation.z;
+            car.x = car.sprite.position.x + 64; car.y = 64 - car.sprite.position.y;
+            car.z = 128; car.rotation = car.sprite.rotation.z;
             car.initPhysics(window._gtaGame);
             if (GTA.allCars.indexOf(car) < 0) GTA.allCars.push(car);
         } catch (e) { GTA.Log('steal err: ' + e.message); }
     }
 };
 
-GTA._aiMk = function ( game, pts, CLEAN, startFrac, key ) {
-    var idx = GTA.aiCarsPath.length;
-    try {
-        var car = new GTA.GameObjectPosition();
-        car.addCar(game, CLEAN[idx % CLEAN.length], 0, 0, 0, 0);
-        var segs = [], total = 0;
-        for (var i = 0; i < pts.length - 1; i++) { var dx = pts[i+1][0]-pts[i][0], dy = pts[i+1][1]-pts[i][1], len = Math.sqrt(dx*dx+dy*dy); segs.push({ x0: pts[i][0], y0: pts[i][1], dx: dx, dy: dy, len: len, ang: Math.atan2(dy, dx) }); total += len; }
-        car._path = { pts: pts, segs: segs, total: total, speed: 55 + (idx%4)*12, progress: startFrac*total, _dmgCooldown: 0 };
-        car._bk = key;
-        GTA._placeAICar(car); car.sprite.position.z = 128 + (idx%6); game.scene.add(car.sprite); GTA.aiCarsPath.push(car);
-        return true;
-    } catch (e) { return false; }
-};
-
 GTA._aiPass = function ( game ) {
-    var CLEAN = [58, 29, 41, 27, 13, 9, 28, 6, 21, 34, 2, 37];
-    var WIN = 22, REG = 8, MAX = 70, CARS_PER = 2, RECYCLE = 4200, OFFSCR = 480;
-    var base = game.map.base, used = GTA._aiUsedBuckets;
+    var TARGET = 16, WIN = 22, RECYCLE = 4000, OFFSCR = 520;
+    var base = game.map.base;
+    function road(c, r) { return GTA._aiTopType(base, c, r) === 2; }
     var cam = game.camera.position, cx = cam.x, cy = cam.y;
-    for (var i = GTA.aiCarsPath.length - 1; i >= 0; i--) { var c = GTA.aiCarsPath[i]; var dx = c.sprite.position.x - cx, dy = c.sprite.position.y - cy; if (Math.sqrt(dx*dx+dy*dy) > RECYCLE) { try { game.scene.remove(c.sprite); } catch (e) {} if (c._bk) delete used[c._bk]; GTA.aiCarsPath.splice(i, 1); } }
-    function road(cc, rr) { return GTA._aiTopType(base, cc, rr) === 2; }
-    function wt(x, y) { return GTA._aiTopType(base, Math.round(x/64), -Math.round(y/64)); }
-    function widthX(c, r) { var n = 1, k = c-1; while (road(k,r)) { n++; k--; } k = c+1; while (road(k,r)) { n++; k++; } return n; }
-    function heightY(c, r) { var n = 1, k = r-1; while (road(c,k)) { n++; k--; } k = r+1; while (road(c,k)) { n++; k++; } return n; }
-    function valid(pts) { for (var s = 0; s < pts.length - 1; s++) { var x0 = pts[s][0], y0 = pts[s][1], x1 = pts[s+1][0], y1 = pts[s+1][1], dx = x1-x0, dy = y1-y0, len = Math.sqrt(dx*dx+dy*dy); if (len < 1) continue; var ux = dx/len, uy = dy/len, px = -uy, py = ux, st = Math.max(2, Math.round(len/18)); for (var i = 0; i <= st; i++) { var t = i/st, x = x0+dx*t, y = y0+dy*t; if (wt(x+px*26,y+py*26)!==2 || wt(x-px*26,y-py*26)!==2 || wt(x,y)!==2) return false; } } return true; }
-    function posAt(pts, frac) { var segs = [], total = 0; for (var i = 0; i < pts.length-1; i++) { var dx = pts[i+1][0]-pts[i][0], dy = pts[i+1][1]-pts[i][1], len = Math.sqrt(dx*dx+dy*dy); segs.push({ x0:pts[i][0], y0:pts[i][1], dx:dx, dy:dy, len:len }); total += len; } var d = frac*total, acc = 0; for (var i = 0; i < segs.length; i++) { if (d <= acc+segs[i].len || i === segs.length-1) { var t = segs[i].len>0?(d-acc)/segs[i].len:0; return [segs[i].x0+segs[i].dx*t, segs[i].y0+segs[i].dy*t]; } acc += segs[i].len; } }
-    function emit(pts, key) { if (GTA.aiCarsPath.length >= MAX) return; var offs = []; for (var f = 0; f < 1; f += 0.07) { var p = posAt(pts, f); if (Math.sqrt((p[0]-cx)*(p[0]-cx)+(p[1]-cy)*(p[1]-cy)) > OFFSCR) offs.push(f); } if (offs.length === 0) return; var chosen = [offs[0]]; for (var k = 1; k < offs.length && chosen.length < CARS_PER; k++) { if (offs[k] - chosen[chosen.length-1] > 0.35) chosen.push(offs[k]); } chosen.forEach(function (f) { if (GTA.aiCarsPath.length < MAX) GTA._aiMk(game, pts, CLEAN, f, key); }); used[key] = 1; }
-    var rc = Math.round(cx/64), rr0 = -Math.round(cy/64);
-    var C0 = Math.max(3, rc-WIN), C1 = Math.min(251, rc+WIN), R0 = Math.max(3, rr0-WIN), R1 = Math.min(252, rr0+WIN);
-    var H = [], V = [];
-    for (var r = R0; r <= R1; r++) { var c = C0; while (c < C1) { if (road(c,r) && road(c,r+1)) { var c0 = c; while (c < C1 && road(c,r) && road(c,r+1)) c++; if ((c-c0) >= 4) H.push({ r: r, c0: c0, c1: c-1, len: c-c0 }); } else c++; } }
-    for (var cc = C0; cc <= C1; cc++) { var r2 = R0; while (r2 < R1) { if (road(cc,r2) && road(cc+1,r2)) { var r0 = r2; while (r2 < R1 && road(cc,r2) && road(cc+1,r2)) r2++; if ((r2-r0) >= 4) V.push({ c: cc, r0: r0, r1: r2-1, len: r2-r0 }); } else r2++; } }
-    function bk(r, c) { return Math.floor(r/REG) + '_' + Math.floor(c/REG); }
-    for (var i2 = 0; i2 < H.length; i2++) { if (GTA.aiCarsPath.length >= MAX) break; var a = H[i2]; for (var j = 0; j < H.length; j++) { var b = H[j]; var gap = b.r - a.r; if (gap < 4 || gap > 14) continue; var ovL = Math.max(a.c0,b.c0), ovR = Math.min(a.c1,b.c1); if (ovR-ovL < 4) continue; var sides = []; for (var k = 0; k < V.length; k++) { var v = V[k]; if (v.c>=ovL && v.c<=ovR && v.r0<=a.r && v.r1>=b.r) sides.push(v.c); } if (sides.length < 2) continue; var cL = Math.min.apply(0,sides), cR = Math.max.apply(0,sides); if (cR-cL < 4 || cR-cL > 14) continue; var midC = Math.round((cL+cR)/2), midR = Math.round((a.r+b.r)/2); if (road(midC, midR)) continue; var key = bk(a.r, (cL+cR)/2); if (used[key]) continue; var tY = -(64*a.r+32), bY = -(64*b.r+32), lX = 64*cL+32, rX = 64*cR+32; var ring = [[lX,tY],[rX,tY],[rX,bY],[lX,bY],[lX,tY]]; if (valid(ring)) emit(ring, key); } }
-    var cand = []; for (var hi = 0; hi < H.length; hi++) cand.push({ d:'h', r:H[hi].r, a:H[hi].c0, b:H[hi].c1, len:H[hi].len }); for (var vi = 0; vi < V.length; vi++) cand.push({ d:'v', c:V[vi].c, a:V[vi].r0, b:V[vi].r1, len:V[vi].len }); cand.sort(function (x, y) { return y.len - x.len; });
-    for (var s = 0; s < cand.length; s++) { if (GTA.aiCarsPath.length >= MAX) break; var q = cand[s]; if (q.len < 6) continue; var key, pts;
-        if (q.d === 'h') { var cm = Math.round((q.a+q.b)/2); if (!(widthX(cm,q.r) > heightY(cm,q.r))) continue; key = bk(q.r, (q.a+q.b)/2); if (used[key]) continue; var y = -(64*q.r+32); pts = [[64*q.a, y],[64*q.b, y]]; }
-        else { var rm = Math.round((q.a+q.b)/2); if (!(heightY(q.c,rm) > widthX(q.c,rm))) continue; key = bk((q.a+q.b)/2, q.c); if (used[key]) continue; var x = 64*q.c+32; pts = [[x, -(64*q.a)],[x, -(64*q.b)]]; }
-        if (valid(pts)) emit(pts, key); }
+    for (var i = GTA.aiCarsPath.length - 1; i >= 0; i--) { var c = GTA.aiCarsPath[i]; var dx = c.sprite.position.x - cx, dy = c.sprite.position.y - cy; if (Math.sqrt(dx*dx+dy*dy) > RECYCLE) { try { game.scene.remove(c.sprite); } catch (e) {} GTA.aiCarsPath.splice(i, 1); } }
+    var rc = Math.round(cx/64), rr0 = -Math.round(cy/64), dirs = [[1,0],[-1,0],[0,1],[0,-1]], tries = 0;
+    while (GTA.aiCarsPath.length < TARGET && tries < 60) {
+        tries++;
+        var col = rc + Math.floor((Math.random()*2-1)*WIN), row = rr0 + Math.floor((Math.random()*2-1)*WIN);
+        if (!road(col, row)) continue;
+        var wx = 64*col, wy = -64*row;
+        if (Math.sqrt((wx-cx)*(wx-cx)+(wy-cy)*(wy-cy)) < OFFSCR) continue;
+        var vd = dirs.filter(function (d) { return road(col + d[0], row - d[1]); });
+        if (!vd.length) continue;
+        var idx = GTA.aiCarsPath.length;
+        try {
+            var car = new GTA.GameObjectPosition();
+            car.addCar(game, GTA._aiClean[idx % GTA._aiClean.length], 0, 0, 0, 0);
+            car._w = { px: wx, py: wy, dir: vd[Math.floor(Math.random()*vd.length)], speed: 60 + (idx%4)*12, tcx: wx, tcy: wy };
+            GTA._wNext(car);
+            car.sprite.position.z = 128 + (idx%6);
+            game.scene.add(car.sprite); GTA.aiCarsPath.push(car);
+        } catch (e) {}
+    }
     return 0;
 };
 
 GTA.spawnAICars = function ( game ) {
     if (GTA._aiStarted) return;
     GTA._aiStarted = true;
-    GTA._aiUsedBuckets = {};
     GTA._aiPass(game);
     GTA._aiInterval = setInterval(function () { try { GTA._aiPass(game); } catch (e) {} }, 2500);
-    GTA.Log('AI: gerador de trafego (em volta do player) iniciado');
+    GTA.Log('AI: trafego (wander) iniciado');
 };
 
 GTA.updateAICars = function ( delta ) {
-    GTA.aiCarsPath.forEach(function ( car ) {
-        var p = car._path;
-        p.progress += p.speed * delta;
-        if (p.progress >= p.total) p.progress -= p.total;
-        GTA._placeAICar(car);
-    });
+    for (var i = GTA.aiCarsPath.length - 1; i >= 0; i--) {
+        var car = GTA.aiCarsPath[i];
+        if (car._w) { if (!GTA._wUpdate(car, delta)) { try { window._gtaGame.scene.remove(car.sprite); } catch (e) {} GTA.aiCarsPath.splice(i, 1); } }
+    }
 };
 
 GTA._aiBoot = function () {
