@@ -16,101 +16,189 @@
 GTA.aiCarsPath = GTA.aiCarsPath || [];
 
 // âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// CARROS IA  â  movimento direto em Three.js, sem Box2D
+// CARROS IA  â  spawn/despawn dinÃ¢mico baseado na cÃ¢mera
 // âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+//
+// PrincÃ­pio: o carro entra pela borda FORA do campo de visÃ£o e
+// sai pelo outro lado tambÃ©m fora da tela. Nunca hÃ¡ teleporte visÃ­vel.
+//
+// FOV=45Â° â half_height = tan(22.5Â°) Ã (camZ-spriteZ) = 0.4142 Ã (400-128) â 113 px
+// half_width  = half_height Ã (canvas_width / canvas_height)
+//
+// Bounds de spawn/despawn = visÃ­vel + MARGIN de seguranÃ§a
 
-GTA.spawnAICars = function ( game ) {
+var _AI_MAX_CARS       = 6;    // mÃ¡ximo de carros IA simultÃ¢neos
+var _AI_MARGIN         = 100;  // px alÃ©m da borda visÃ­vel (evita pop-in)
+var _AI_HALF_H         = 113;  // metade da altura visÃ­vel em Three.js units
+var _AI_MIN_GAP        = 130;  // gap mÃ­nimo entre carros na mesma lane
+var _AI_SPAWN_INTERVAL = 1.0;  // segundos entre tentativas de spawn
+GTA._aiSpawnTimer      = 0;
 
-    var P = Math.PI;
+// DefiniÃ§Ã£o das 4 lanes de trÃ¡fego
+// axis='x': lane horizontal   dir=+1 â Leste (WâE)   dir=-1 â Oeste (EâW)
+// axis='y': lane vertical     dir=-1 â Sul  (NâS)    dir=+1 â Norte (SâN)
+var _AI_LANES = [
+    { carType: 58, axis: 'x', lanePos: -208, dir: +1, rotZ: -Math.PI/2, speed: 90 }, // Leste
+    { carType:  4, axis: 'x', lanePos: -176, dir: -1, rotZ:  Math.PI/2, speed: 90 }, // Oeste
+    { carType: 58, axis: 'y', lanePos:  496, dir: -1, rotZ:  Math.PI,   speed: 70 }, // Sul
+    { carType:  4, axis: 'y', lanePos:  528, dir: +1, rotZ:  0,         speed: 70 }, // Norte
+];
 
-    // Rotas estendidas para alÃ©m da tela (x<100 ou x>900, y>-50 ou y<-380)
-    // â teleporte progress=0 ocorre fora do campo de visÃ£o, invisÃ­vel ao player
-    // Camera segue player em xâ512, yâ-192; FOV=45, z=400 â visÃ­vel â x[112..912], y[-592..192]
-    // [tipo, startX, startY, endX, endY, rotZ, speed(px/s)]
-    var routes = [
-        [58,   80, -208,  940, -208, -P/2,  90],   // Leste  (860px / 90px/s â 9.6s)
-        [ 4,  940, -176,   80, -176,  P/2,  90],   // Oeste
-        [58,  496,  -40,  496, -390,   P,   70],   // Sul    (350px / 70px/s = 5.0s)
-        [ 4,  528, -390,  528,  -40,   0,   70],   // Norte
-    ];
+// Retorna {left, right, bottom, top} = Ã¡rea visÃ­vel + margem, centrada na cÃ¢mera
+function _aiGetBounds(camX, camY) {
+    var asp = (window.innerWidth && window.innerHeight)
+        ? (window.innerWidth / window.innerHeight)
+        : 1.778;
+    var hw = _AI_HALF_H * asp + _AI_MARGIN;
+    var hh = _AI_HALF_H + _AI_MARGIN;
+    return {
+        left:   camX - hw,
+        right:  camX + hw,
+        bottom: camY - hh,
+        top:    camY + hh
+    };
+}
 
-    routes.forEach(function (r, idx) {
-        try {
-            var c = new GTA.GameObjectPosition();
-            c.addCar(game, r[0], 64, 64, 128, 0);
+// Coordenada de entrada de um carro (ponto de spawn, fora da tela)
+//   lane horizontal dir=+1 (Leste): entra pela esquerda (b.left)
+//   lane horizontal dir=-1 (Oeste): entra pela direita  (b.right)
+//   lane vertical   dir=-1 (Sul):   entra por cima      (b.top, pois y decresce)
+//   lane vertical   dir=+1 (Norte): entra por baixo     (b.bottom)
+function _aiEntryPt(lane, b) {
+    if (lane.axis === 'x') {
+        return { x: lane.dir > 0 ? b.left : b.right, y: lane.lanePos };
+    } else {
+        return { x: lane.lanePos, y: lane.dir < 0 ? b.top : b.bottom };
+    }
+}
 
-            var dx = r[3] - r[1];
-            var dy = r[4] - r[2];
-            var totalDist = Math.sqrt(dx * dx + dy * dy);
+// O carro jÃ¡ passou pela borda de saÃ­da (deve ser despawnado)?
+function _aiExited(car, b) {
+    var p  = car._path;
+    var cx = car.sprite.position.x;
+    var cy = car.sprite.position.y;
+    if (p.axis === 'x') {
+        return p.dir > 0 ? cx > b.right : cx < b.left;
+    } else {
+        return p.dir < 0 ? cy < b.bottom : cy > b.top;
+    }
+}
 
-            // Escalonar: cada carro comeÃ§a em 1/4 da rota para nunca sincronizarem
-            var initialProgress = (idx / routes.length) * totalDist;
+// Tenta criar um carro numa lane. Retorna true se spawnou, false se o gap mÃ­nimo
+// nÃ£o foi respeitado (evita carros empilhados na borda de entrada).
+function _aiSpawn(lane, b, game) {
+    var entry = _aiEntryPt(lane, b);
 
-            c.sprite.position.x = r[1] + dx * (initialProgress / totalDist);
-            c.sprite.position.y = r[2] + dy * (initialProgress / totalDist);
-            c.sprite.position.z = 128 + idx * 2;  // z ligeiramente diferente evita z-fighting
-            c.sprite.rotation.z = r[5];
-            game.scene.add(c.sprite);
+    // Verifica gap com outros carros na mesma lane
+    for (var j = 0; j < GTA.aiCarsPath.length; j++) {
+        var ec = GTA.aiCarsPath[j];
+        if (!ec._path) continue;
+        if (ec._path.axis !== lane.axis || ec._path.lanePos !== lane.lanePos) continue;
+        var d = lane.axis === 'x'
+            ? Math.abs(ec.sprite.position.x - entry.x)
+            : Math.abs(ec.sprite.position.y - entry.y);
+        if (d < _AI_MIN_GAP) return false;
+    }
 
-            c._path = {
-                startX:    r[1],
-                startY:    r[2],
-                endX:      r[3],
-                endY:      r[4],
-                rot:       r[5],
-                speed:     r[6],
-                dx:        dx,
-                dy:        dy,
-                totalDist: totalDist,
-                progress:  initialProgress,
-                _dmgCooldown: 0
-            };
+    try {
+        var c = new GTA.GameObjectPosition();
+        c.addCar(game, lane.carType, 64, 64, 128, 0);
+        c.sprite.position.x = entry.x;
+        c.sprite.position.y = entry.y;
+        c.sprite.position.z = 128 + GTA.aiCarsPath.length * 2;
+        c.sprite.rotation.z = lane.rotZ;
+        game.scene.add(c.sprite);
+        c._path = {
+            axis:         lane.axis,
+            lanePos:      lane.lanePos,
+            dir:          lane.dir,
+            speed:        lane.speed,
+            _dmgCooldown: 0,
+            _disabled:    false
+        };
+        GTA.aiCarsPath.push(c);
+        return true;
+    } catch (e) {
+        GTA.Log('AI spawn error: ' + e.message);
+        return false;
+    }
+}
 
-            GTA.aiCarsPath.push(c);
-
-        } catch (e) {
-            GTA.Log('AI car spawn error: ' + e.message);
-        }
+// Chamado uma vez por spawnAIPedestrians apÃ³s os pedestres serem criados
+GTA.spawnAICars = function(game) {
+    // Spawn inicial: 1 carro por lane, jÃ¡ posicionado na borda de entrada
+    // (fora da tela). Eles entram naturalmente nas primeiras travessias.
+    var b = _aiGetBounds(512, -192);   // posiÃ§Ã£o inicial do player
+    var n = 0;
+    _AI_LANES.forEach(function(lane) {
+        if (_aiSpawn(lane, b, game)) n++;
     });
-
-    GTA.Log('AI: spawnAICars done (' + routes.length + ' carros)');
+    GTA.Log('AI: spawnAICars (' + n + ' carros iniciais)');
 };
 
 // Chamado a cada frame por core.js
-GTA.updateAICars = function ( delta ) {
-    GTA.aiCarsPath.forEach(function (car) {
-        var p = car._path;
+GTA.updateAICars = function(delta) {
+    var _game = window._gtaGame;
+    if (!_game || !_game.scene) return;
 
-        // ââ AvanÃ§ar na rota âââââââââââââââââââââââââââââââââââ
-        p.progress += p.speed * delta;
+    // CÃ¢mera segue o player â usa posiÃ§Ã£o do player como centro da visÃ£o
+    var camX = (_game.player && _game.player.position) ? _game.player.position.x : 512;
+    var camY = (_game.player && _game.player.position) ? _game.player.position.y : -192;
+    var b = _aiGetBounds(camX, camY);
 
-        if (p.progress >= p.totalDist) {
-            // Chegou ao fim â reinicia imediatamente sem pausa
-            p.progress = 0;
+    // ââ 1. Mover carros e despawnar os que saÃ­ram da tela âââââ
+    for (var i = GTA.aiCarsPath.length - 1; i >= 0; i--) {
+        var car = GTA.aiCarsPath[i];
+        var p   = car._path;
+        if (!p || p._disabled) continue;
+
+        // Move na direÃ§Ã£o da lane
+        if (p.axis === 'x') {
+            car.sprite.position.x += p.dir * p.speed * delta;
+        } else {
+            car.sprite.position.y += p.dir * p.speed * delta;
         }
 
-        var t = p.progress / p.totalDist;
-        car.sprite.position.x = p.startX + p.dx * t;
-        car.sprite.position.y = p.startY + p.dy * t;
+        // Remove quando sair do bounds (fora da tela + margem)
+        if (_aiExited(car, b)) {
+            if (car.sprite.parent) car.sprite.parent.remove(car.sprite);
+            GTA.aiCarsPath.splice(i, 1);
+        }
+    }
 
-        // ââ ColisÃ£o com player a pÃ© âââââââââââââââââââââââââââ
-        var _game = window._gtaGame;
-        if (_game && _game.player && !_game.player.inCar) {
-            var _pl = _game.player;
-            var _cx = _pl.position.x - car.sprite.position.x;
-            var _cy = _pl.position.y - car.sprite.position.y;
-            if (Math.sqrt(_cx * _cx + _cy * _cy) < 50) {
-                if (!p._dmgCooldown || p._dmgCooldown <= 0) {
+    // ââ 2. Spawn periÃ³dico para manter o pool âââââââââââââââââ
+    GTA._aiSpawnTimer += delta;
+    if (GTA._aiSpawnTimer >= _AI_SPAWN_INTERVAL) {
+        GTA._aiSpawnTimer = 0;
+        if (GTA.aiCarsPath.length < _AI_MAX_CARS) {
+            // Tenta lanes em ordem aleatÃ³ria; para na primeira que aceitar
+            var order = _AI_LANES.slice().sort(function() { return Math.random() - 0.5; });
+            for (var k = 0; k < order.length; k++) {
+                if (_aiSpawn(order[k], b, _game)) break;
+            }
+        }
+    }
+
+    // ââ 3. ColisÃ£o/dano ao player a pÃ© âââââââââââââââââââââââ
+    if (_game.player && !_game.player.inCar) {
+        var _pl = _game.player;
+        for (var m = 0; m < GTA.aiCarsPath.length; m++) {
+            var ac = GTA.aiCarsPath[m];
+            if (!ac._path || ac._path._disabled) continue;
+            var _cx = _pl.position.x - ac.sprite.position.x;
+            var _cy = _pl.position.y - ac.sprite.position.y;
+            if (Math.sqrt(_cx*_cx + _cy*_cy) < 50) {
+                if (!ac._path._dmgCooldown || ac._path._dmgCooldown <= 0) {
                     if (typeof window.GTA_health !== 'undefined') {
                         window.GTA_health = Math.max(0, window.GTA_health - 1);
                         GTA.Log('Atropelado! Vida: ' + window.GTA_health);
                     }
-                    p._dmgCooldown = 1.5;
+                    ac._path._dmgCooldown = 1.5;
                 }
             }
+            if (ac._path._dmgCooldown > 0) ac._path._dmgCooldown -= delta;
         }
-        if (p._dmgCooldown > 0) p._dmgCooldown -= delta;
-    });
+    }
 };
 
 // âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
