@@ -72,7 +72,7 @@ GTA.disableAICar = function ( car ) {
 };
 
 GTA._aiPass = function ( game ) {
-    var WIN = 22, REG = 6, MAX = 70, CARS_PER = 2, RECYCLE = 4500, OFFSCR = 600, EXT = 40;
+    var WIN = 22, REG = 8, MAX = 70, CARS_PER = 2, RECYCLE = 4500, OFFSCR = 520, EXT = 40;
     var base = game.map.base, used = GTA._aiUsedBuckets;
     var cam = game.camera.position, cx = cam.x, cy = cam.y;
     for (var i = GTA.aiCarsPath.length - 1; i >= 0; i--) { var c = GTA.aiCarsPath[i]; var dx = c.sprite.position.x - cx, dy = c.sprite.position.y - cy; if (Math.sqrt(dx*dx+dy*dy) > RECYCLE) { try { game.scene.remove(c.sprite); } catch (e) {} if (c._bk) delete used[c._bk]; GTA.aiCarsPath.splice(i, 1); } }
@@ -107,17 +107,7 @@ GTA.spawnAICars = function ( game ) {
 };
 
 GTA.updateAICars = function ( delta ) {
-    var cam = window._gtaGame.camera.position;
-    for (var i = GTA.aiCarsPath.length - 1; i >= 0; i--) {
-        var car = GTA.aiCarsPath[i]; var p = car._path;
-        p.progress += p.speed * delta;
-        if (p.progress >= p.total) {
-            var s = p.pts[0];
-            if (Math.sqrt((s[0]-cam.x)*(s[0]-cam.x) + (s[1]-cam.y)*(s[1]-cam.y)) < 560) { try { window._gtaGame.scene.remove(car.sprite); } catch (e) {} GTA.aiCarsPath.splice(i, 1); continue; }
-            p.progress -= p.total;
-        }
-        GTA._placeAICar(car);
-    }
+    GTA.aiCarsPath.forEach(function ( car ) { var p = car._path; p.progress += p.speed * delta; if (p.progress >= p.total) p.progress -= p.total; GTA._placeAICar(car); });
 };
 
 GTA._aiBoot = function () {
