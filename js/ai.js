@@ -402,3 +402,45 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         // Nunca quebra o animate loop
     }
 };
+
+
+// === BATIDAS: carro do player colide com o transito (adicionado por cima) ===
+(function () {
+    if (GTA._batidaOn) return; GTA._batidaOn = true;
+    // garante que entrar no carro nunca quebre se player.js chamar disableAICar
+    if (typeof GTA.disableAICar !== 'function') {
+        GTA.disableAICar = function (car) { var i = GTA.aiCarsPath.indexOf(car); if (i >= 0) GTA.aiCarsPath.splice(i, 1); };
+    }
+    GTA._aiToPhysics = function (car, game) {
+        if (!car || car.physics || typeof car.initPhysics !== 'function' || !car.sprite) return false;
+        try {
+            car.x = car.sprite.position.x + 64; car.y = 64 - car.sprite.position.y;
+            car.z = 128; car.rotation = car.sprite.rotation.z;
+            car.initPhysics(game);
+            GTA.allCars = GTA.allCars || [];
+            if (GTA.allCars.indexOf(car) < 0) GTA.allCars.push(car);
+            return true;
+        } catch (e) { return false; }
+    };
+    GTA._aiCarCollisions = function () {
+        var g = window._gtaGame; if (!g || !g.player) return;
+        var pl = g.player; if (!pl.inCar || !pl.currentCar || !pl.currentCar.sprite) return;
+        var pc = pl.currentCar, pcx = pc.sprite.position.x, pcy = pc.sprite.position.y;
+        for (var i = GTA.aiCarsPath.length - 1; i >= 0; i--) {
+            var car = GTA.aiCarsPath[i]; if (!car || !car.sprite) continue;
+            var dx = car.sprite.position.x - pcx, dy = car.sprite.position.y - pcy;
+            if (dx*dx + dy*dy < 3364) {
+                var stack = false, all = GTA.allCars || [];
+                for (var a = 0; a < all.length; a++) { var ac = all[a]; if (ac === pc || !ac.sprite) continue; var ax = ac.sprite.position.x - car.sprite.position.x, ay = ac.sprite.position.y - car.sprite.position.y; if (ax*ax + ay*ay < 2500) { stack = true; break; } }
+                if (stack) continue;
+                GTA._aiToPhysics(car, g);
+                GTA.aiCarsPath.splice(i, 1);
+            }
+        }
+    };
+    var _orig = GTA.updateAICars;
+    GTA.updateAICars = function (delta) {
+        if (typeof _orig === 'function') _orig(delta);
+        try { GTA._aiCarCollisions(); } catch (e) {}
+    };
+})();
