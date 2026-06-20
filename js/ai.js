@@ -318,9 +318,25 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
 };
 
 
-// === BATIDAS: carro do player colide com o transito (adicionado por cima) ===
+// === BATIDAS + AMASSADOS (marcas de batida + fumaca + fogo no nivel maximo) ===
 (function () {
-    if (GTA._batidaOn) return; GTA._batidaOn = true;
+    if (GTA._dmgOn) return; GTA._dmgOn = true; GTA._batidaOn = true;
+    var T = THREE;
+    function rnd(a, b) { return a + Math.random() * (b - a); }
+    function quadXY(w, h) {
+        var g = new T.Geometry();
+        g.vertices.push(new T.Vector3(-w/2, -h/2, 0));
+        g.vertices.push(new T.Vector3( w/2, -h/2, 0));
+        g.vertices.push(new T.Vector3( w/2,  h/2, 0));
+        g.vertices.push(new T.Vector3(-w/2,  h/2, 0));
+        g.faces.push(new T.Face4(0, 1, 2, 3));
+        try { g.computeFaceNormals(); g.computeCentroids(); } catch (e) {}
+        return g;
+    }
+    function mkQuad(w, h, color, opacity) {
+        var m = new T.MeshBasicMaterial({ color: color, transparent: true, opacity: opacity, depthTest: false, side: T.DoubleSide });
+        return new T.Mesh(quadXY(w, h), m);
+    }
     if (typeof GTA.disableAICar !== 'function') {
         GTA.disableAICar = function (car) { var i = GTA.aiCarsPath.indexOf(car); if (i >= 0) GTA.aiCarsPath.splice(i, 1); };
     }
@@ -335,6 +351,76 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
             return true;
         } catch (e) { return false; }
     };
+    GTA._addDents = function (car, n) {
+        if (!car || !car.sprite) return;
+        var host = car.sprite, w = (car.width || 40), h = (car.height || 80);
+        car._dents = car._dents || [];
+        for (var i = 0; i < n; i++) {
+            try {
+                var s = rnd(0.12, 0.24);
+                var mark = mkQuad(w * s, h * s * rnd(0.6, 1.3), 0x080808, rnd(0.5, 0.8));
+                mark.position.set(rnd(-w*0.34, w*0.34), rnd(-h*0.42, h*0.42), 1 + car._dents.length * 0.03);
+                mark.rotation.z = rnd(0, Math.PI);
+                host.add(mark); car._dents.push(mark);
+            } catch (e) {}
+        }
+    };
+    GTA._fx = GTA._fx || [];
+    GTA._spawnFx = function (car, kind, count) {
+        if (!car || !car.sprite || !window._gtaGame) return;
+        var scene = window._gtaGame.scene;
+        var px = car.sprite.position.x, py = car.sprite.position.y, pz = car.sprite.position.z;
+        for (var i = 0; i < count; i++) {
+            try {
+                var fire = (kind === 'fire');
+                var sz = fire ? rnd(10, 22) : rnd(14, 28);
+                var col = fire ? (Math.random() < 0.5 ? 0xff6a00 : 0xffcc00) : (Math.random() < 0.5 ? 0x1c1c1c : 0x4a4a4a);
+                var p = mkQuad(sz, sz, col, fire ? 0.9 : 0.55);
+                p.position.set(px + rnd(-10, 10), py + rnd(-10, 10), pz + 6 + rnd(0, 8));
+                scene.add(p);
+                GTA._fx.push({ mesh: p, life: 0, max: fire ? rnd(0.4, 0.8) : rnd(0.9, 1.7), vy: rnd(14, 34), vx: rnd(-7, 7), grow: fire ? rnd(0.5, 1.0) : rnd(1.0, 2.2), o0: fire ? 0.9 : 0.55 });
+            } catch (e) {}
+        }
+    };
+    GTA._updateFx = function (delta) {
+        if (!GTA._fx.length || !window._gtaGame) return;
+        var scene = window._gtaGame.scene;
+        for (var i = GTA._fx.length - 1; i >= 0; i--) {
+            var f = GTA._fx[i]; f.life += delta; var t = f.life / f.max;
+            if (t >= 1) { try { scene.remove(f.mesh); } catch (e) {} GTA._fx.splice(i, 1); continue; }
+            f.mesh.position.y += f.vy * delta; f.mesh.position.x += f.vx * delta;
+            var sc = 1 + f.grow * t; f.mesh.scale.set(sc, sc, 1);
+            f.mesh.material.opacity = f.o0 * (1 - t);
+        }
+    };
+    GTA._emitters = GTA._emitters || [];
+    GTA._registerEmitter = function (car, kind) {
+        for (var i = 0; i < GTA._emitters.length; i++) { if (GTA._emitters[i].car === car) { GTA._emitters[i].kind = kind; return; } }
+        GTA._emitters.push({ car: car, kind: kind, t: 0 });
+    };
+    GTA._updateEmitters = function (delta) {
+        for (var i = GTA._emitters.length - 1; i >= 0; i--) {
+            var e = GTA._emitters[i];
+            if (!e.car || !e.car.sprite) { GTA._emitters.splice(i, 1); continue; }
+            e.t += delta; var iv = (e.kind === 'fire') ? 0.09 : 0.20;
+            if (e.t >= iv) { e.t = 0; GTA._spawnFx(e.car, e.kind === 'fire' ? 'fire' : 'smoke', e.kind === 'fire' ? 2 : 1); }
+        }
+    };
+    GTA._applyDamage = function (car, game) {
+        if (!car || !car.sprite) return;
+        var now = (window.performance && performance.now) ? performance.now() : Date.now();
+        if (car._dmgCd && now - car._dmgCd < 600) return;
+        car._dmgCd = now; car._dmg = (car._dmg || 0) + 1;
+        if (car._dmg === 1) { GTA._addDents(car, 2); }
+        else if (car._dmg === 2) { GTA._addDents(car, 3); }
+        else if (car._dmg === 3) { GTA._addDents(car, 4); GTA._spawnFx(car, 'smoke', 4); GTA._registerEmitter(car, 'smoke'); }
+        else if (car._dmg >= 4 && !car._destroyed) {
+            car._destroyed = true; GTA._addDents(car, 5);
+            GTA._spawnFx(car, 'fire', 10); GTA._registerEmitter(car, 'fire');
+            try { var mesh = (car.sprite.material) ? car.sprite : (car.sprite.sprite || car.sprite); if (mesh && mesh.material) { mesh.material = mesh.material.clone(); mesh.material.color = new T.Color(0x2a2a2a); } } catch (e) {}
+            try { if (car.physics) car.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0)); } catch (e) {}
+        }
+    };
     GTA._aiCarCollisions = function () {
         var g = window._gtaGame; if (!g || !g.player) return;
         var pl = g.player; if (!pl.inCar || !pl.currentCar || !pl.currentCar.sprite) return;
@@ -342,18 +428,20 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         for (var i = GTA.aiCarsPath.length - 1; i >= 0; i--) {
             var car = GTA.aiCarsPath[i]; if (!car || !car.sprite) continue;
             var dx = car.sprite.position.x - pcx, dy = car.sprite.position.y - pcy;
-            if (dx*dx + dy*dy < 3364) {
-                var stack = false, all = GTA.allCars || [];
-                for (var a = 0; a < all.length; a++) { var ac = all[a]; if (ac === pc || !ac.sprite) continue; var ax = ac.sprite.position.x - car.sprite.position.x, ay = ac.sprite.position.y - car.sprite.position.y; if (ax*ax + ay*ay < 2500) { stack = true; break; } }
-                if (stack) continue;
-                GTA._aiToPhysics(car, g);
-                GTA.aiCarsPath.splice(i, 1);
-            }
+            if (dx*dx + dy*dy < 4900) { GTA._aiToPhysics(car, g); GTA.aiCarsPath.splice(i, 1); GTA._applyDamage(car, g); GTA._applyDamage(pc, g); }
+        }
+        var all = GTA.allCars || [];
+        for (var a = 0; a < all.length; a++) {
+            var ac = all[a]; if (ac === pc || !ac || !ac.sprite) continue;
+            var ex = ac.sprite.position.x - pcx, ey = ac.sprite.position.y - pcy;
+            if (ex*ex + ey*ey < 4900) { GTA._applyDamage(ac, g); GTA._applyDamage(pc, g); }
         }
     };
     var _orig = GTA.updateAICars;
     GTA.updateAICars = function (delta) {
         if (typeof _orig === 'function') _orig(delta);
         try { GTA._aiCarCollisions(); } catch (e) {}
+        try { GTA._updateEmitters(delta); } catch (e) {}
+        try { GTA._updateFx(delta); } catch (e) {}
     };
 })();
