@@ -517,11 +517,20 @@ GTA.parseCMP = function ( data ) {
       
         var recallFunc = function( ) {
             window.setTimeout(function() {
-                var y;
-                for (y = 0; y < 256; y+= 1) {
-                    map.addColumn( x, y, columnDataView );
+                // Processa varias colunas por tick. setTimeout(0) e clampado p/ >=1s
+                // em aba de fundo; com 1 coluna/tick eram 256 ticks (~4min). Em lotes
+                // de 16 sao ~16 ticks. Durante o load nao ha nada interativo alem da barra.
+                var CHUNK = 16, end = Math.min(256, x + CHUNK), y;
+                for (; x < end; x += 1) {
+                    for (y = 0; y < 256; y += 1) {
+                        map.addColumn( x, y, columnDataView );
+                    }
                 }
-                x += 1;
+                try {
+                    var _pct = Math.round(x/256*100);
+                    if (window.GTA_onLoadProgress) { window.GTA_onLoadProgress(_pct); }
+                    else { var _bar = document.getElementById('_loadBar'); if (_bar) { _bar.style.animation = 'none'; _bar.style.width = _pct + '%'; } }
+                } catch (e) {}
                 if ( x < 256) {
                     recallFunc();
                 } else {
