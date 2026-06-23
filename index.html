@@ -103,6 +103,17 @@
     <button id="_playBtn" style="margin-top:12px;padding:16px 56px;background:#cc0000;color:#fff;border:2px solid #ff4444;border-radius:0;font-size:15px;font-family:'Courier New',monospace;font-weight:bold;cursor:pointer;letter-spacing:4px;">JOGAR</button>
 </div>
 
+<!-- --- SELECAO DE PERSONAGEM (sobreposta ao load p/ mascarar a espera) --- -->
+<div id="_charSelect" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0b0b0b;z-index:99998;flex-direction:column;align-items:center;justify-content:center;gap:22px;font-family:'Courier New',monospace;">
+    <div style="color:#cc0000;font-size:32px;font-weight:900;letter-spacing:5px;text-shadow:2px 2px 0 #440000;">ESCOLHA SEU PERSONAGEM</div>
+    <div id="_csCards" style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center;max-width:90%;"></div>
+    <div style="width:240px;height:6px;background:#222;border-radius:3px;overflow:hidden;margin-top:6px;">
+        <div id="_csBar" style="height:100%;width:0%;background:#e55;border-radius:3px;transition:width .2s;"></div>
+    </div>
+    <div id="_csPct" style="color:#888;font-size:12px;letter-spacing:1px;">Carregando mapa... 0%</div>
+    <button id="_csStart" disabled style="margin-top:8px;padding:14px 50px;background:#cc0000;color:#fff;border:2px solid #ff4444;font-size:15px;font-family:'Courier New',monospace;font-weight:bold;letter-spacing:3px;opacity:0.4;cursor:default;">ESCOLHA UM PERSONAGEM</button>
+</div>
+
 <!-- âââ AVISO DE ROTACAO âââââââââââââââââââââââââââââââââââââââââ -->
 <div id="_rotMsg">
     <div style="font-size:48px">&#8635;</div>
@@ -264,6 +275,19 @@ function adicionarDinheiro(valor) {
     atualizarHUD();
 }
 
+/* Mortes (tiro/atropelamento) geram procurado — chamado por ai.js GTA._killPed */
+var GTA_mortes = 0;
+window.GTA_registrarMorte = function(cause) {
+    GTA_mortes++;
+    // A cada 4 mortes sobe 1 estrela (1a morte ja deixa procurado)
+    if (GTA_mortes % 4 === 1) {
+        GTA_procurado = Math.min(5, GTA_procurado + 1);
+        GTA_timerFuga = 0;
+        mostrarNotificacao(GTA_procurado === 1 ? 'POLICIA ALERTADA!' : 'PROCURADO +1');
+    }
+    atualizarHUD();
+};
+
 /* ââ Sistema de procurado (3 carros em 2 min = 1 estrela) âââââ */
 var GTA_roubosCarros = [];   // timestamps (ms) dos roubos
 var GTA_timerFuga    = 0;    // segundos fora do carro sem crime
@@ -384,6 +408,8 @@ function dispararArma() {
 
     mostrarFlash();
     atualizarHUD();
+    // Projetil de verdade (hitscan + tracer + dano a peds/carros) em ai.js
+    if (window.GTA && GTA.fireBullet) GTA.fireBullet();
 }
 
 function iniciarMetralhadora() {
@@ -575,32 +601,100 @@ function loopPickups() {
 }
 
 /* ââ Botao JOGAR ââââââââââââââââââââââââââââââââââââââââââââââ */
-function iniciarJogo() {
-    document.getElementById('_menu').style.display = 'none';
-    document.getElementById('mc').style.display    = 'block';
-    document.getElementById('_hud').style.display  = 'block';
-    atualizarHUD();
-    start();
-    loopProcurado();
+// Personagens distintos por COR (tint no material clonado do player; nao afeta peds).
+var GTA_chars = [
+    { nome: 'ORIGINAL', cor: '#cfcfcf', hex: 0xffffff },
+    { nome: 'VERMELHO', cor: '#e24b4b', hex: 0xff7a7a },
+    { nome: 'AZUL',     cor: '#4b7be2', hex: 0x82a4ff },
+    { nome: 'VERDE',    cor: '#46c46e', hex: 0x86e2a0 }
+];
+var GTA_charPick = null;   // indice escolhido
+var GTA_loadDone = false;
 
-    // Cria pickups e corrige depthTest do player apos o jogo carregar
-    setTimeout(function tentarSetup() {
+(function montarCards() {
+    var cont = document.getElementById('_csCards');
+    if (!cont) return;
+    GTA_chars.forEach(function (c, i) {
+        var card = document.createElement('div');
+        card.id = '_csCard' + i;
+        card.onclick = function () { escolherPersonagem(i); };
+        card.style.cssText = 'width:118px;padding:14px;background:#161616;border:3px solid transparent;border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;transition:all .12s;';
+        card.innerHTML =
+            '<div style="width:32px;height:32px;border-radius:50%;background:' + c.cor + ';"></div>' +
+            '<div style="width:52px;height:44px;border-radius:9px 9px 4px 4px;background:' + c.cor + ';"></div>' +
+            '<div style="color:#ccc;font-size:11px;letter-spacing:1px;">' + c.nome + '</div>';
+        cont.appendChild(card);
+    });
+})();
+
+function escolherPersonagem(i) {
+    GTA_charPick = i;
+    for (var k = 0; k < GTA_chars.length; k++) {
+        var card = document.getElementById('_csCard' + k);
+        if (card) {
+            card.style.borderColor = (k === i) ? '#fff' : 'transparent';
+            card.style.transform   = (k === i) ? 'scale(1.08)' : 'scale(1)';
+        }
+    }
+    _csAtualizarBtn();
+}
+
+// Barra de progresso: o loader chama window.GTA_onLoadProgress no build do mapa
+window.GTA_onLoadProgress = function (pct) {
+    var b  = document.getElementById('_csBar');   if (b)  b.style.width = pct + '%';
+    var t  = document.getElementById('_csPct');   if (t)  t.textContent = 'Carregando mapa... ' + pct + '%';
+    var b2 = document.getElementById('_loadBar'); if (b2) { b2.style.animation = 'none'; b2.style.width = pct + '%'; }
+};
+
+function _csAtualizarBtn() {
+    var btn = document.getElementById('_csStart'); if (!btn) return;
+    var pronto = (GTA_charPick !== null) && GTA_loadDone;
+    btn.disabled = !pronto;
+    btn.style.opacity = pronto ? '1' : '0.4';
+    btn.style.cursor  = pronto ? 'pointer' : 'default';
+    btn.textContent   = pronto ? 'COMECAR' : (GTA_charPick === null ? 'ESCOLHA UM PERSONAGEM' : 'CARREGANDO...');
+}
+
+function iniciarJogo() {
+    document.getElementById('_menu').style.display       = 'none';
+    document.getElementById('_loading').style.display    = 'none';
+    document.getElementById('_charSelect').style.display = 'flex';
+    document.getElementById('mc').style.display          = 'block'; // canvas renderiza atras do overlay
+    start();          // dispara o carregamento do mapa EM SEGUNDO PLANO
+    loopProcurado();
+    _csAtualizarBtn();
+    (function esperaLoad() {   // libera o COMECAR quando o player nasce (load pronto)
         var g = window._gtaGame;
-        if (!g || !g.scene || !g.player) { setTimeout(tentarSetup, 500); return; }
-        criarPickups(g);
-        loopPickups();
-        // Fix: player nao some embaixo de estruturas elevadas
-        // depthTest=false faz o sprite do player renderizar sempre na frente
-        try {
-            if (g.player.sprite && g.player.sprite.material) {
-                g.player.sprite.material.depthTest = false;
-            }
-        } catch(e) {}
-    }, 3000);
+        if (g && g.player) { GTA_loadDone = true; _csAtualizarBtn(); return; }
+        setTimeout(esperaLoad, 250);
+    })();
+}
+
+function aplicarPersonagem(hex) {
+    var g = window._gtaGame;
+    if (!g || !g.player || !g.player.sprite || !g.player.sprite.material) return;
+    try {
+        // Clona o material (compartilhado com peds) e tinge SO o player.
+        var nm = g.player.sprite.material.clone();
+        nm.color.setHex(hex);
+        nm.depthTest = false; // mantem o fix: player sempre na frente
+        g.player.sprite.material = nm;
+    } catch (e) {}
+}
+
+function comecarJogo() {
+    if (GTA_charPick === null || !GTA_loadDone) return;
+    aplicarPersonagem(GTA_chars[GTA_charPick].hex);
+    document.getElementById('_charSelect').style.display = 'none';
+    document.getElementById('_hud').style.display        = 'block';
+    atualizarHUD();
+    try { criarPickups(window._gtaGame); loopPickups(); } catch (e) {}
 }
 
 document.getElementById('_playBtn').addEventListener('touchstart', function(e){ e.preventDefault(); iniciarJogo(); }, {passive:false});
 document.getElementById('_playBtn').addEventListener('click', iniciarJogo);
+document.getElementById('_csStart').addEventListener('touchstart', function(e){ e.preventDefault(); comecarJogo(); }, {passive:false});
+document.getElementById('_csStart').addEventListener('click', comecarJogo);
 
 if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){});
 
