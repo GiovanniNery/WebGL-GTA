@@ -432,6 +432,34 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
     function crumple(car, amt) {
         try { var s = car.sprite; if (!s) return; s.scale.set(1 - amt*0.10*rnd(0.6,1.0), 1 - amt*0.10*rnd(0.6,1.0), 1); } catch (e) {}
     }
+    // Chamas NO corpo do carro (filhos do sprite, acompanham o carro) - estagio "queimando"
+    function setBurning(car, on) {
+        var s = car.sprite; if (!s) return;
+        if (on) {
+            if (car._burn) return;
+            car._burn = [];
+            var w = (car.width || 40), h = (car.height || 80);
+            for (var i = 0; i < 6; i++) {
+                try {
+                    var q = mkQuad(w * rnd(0.30, 0.52), h * rnd(0.20, 0.40), (Math.random() < 0.5 ? 0xff7a00 : 0xffd24a), 0.7);
+                    q.material.blending = T.AdditiveBlending;
+                    q.position.set(rnd(-w*0.28, w*0.28), rnd(-h*0.40, h*0.40), 2 + i * 0.05);
+                    q.rotation.z = rnd(0, Math.PI);
+                    s.add(q); car._burn.push(q);
+                } catch (e) {}
+            }
+        } else if (car._burn) {
+            for (var j = 0; j < car._burn.length; j++) { try { s.remove(car._burn[j]); } catch (e) {} }
+            car._burn = null;
+        }
+    }
+    function flickerBurn(car) {
+        if (!car._burn) return;
+        for (var i = 0; i < car._burn.length; i++) {
+            var q = car._burn[i]; q.material.opacity = 0.30 + Math.random() * 0.55;
+            var sc = 0.7 + Math.random() * 0.6; q.scale.set(sc, sc, 1);
+        }
+    }
     GTA._addDents = function (car, n) {
         if (!car || !car.sprite) return;
         var host = car.sprite, w = (car.width || 40), h = (car.height || 80);
@@ -528,14 +556,20 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         }
     };
     GTA._emitters = GTA._emitters || [];
-    GTA._registerEmitter = function (car, kind) {
-        for (var i = 0; i < GTA._emitters.length; i++) { if (GTA._emitters[i].car === car) { GTA._emitters[i].kind = kind; return; } }
-        GTA._emitters.push({ car: car, kind: kind, t: 0 });
+    GTA._registerEmitter = function (car, kind, dur) {
+        for (var i = 0; i < GTA._emitters.length; i++) { if (GTA._emitters[i].car === car) { GTA._emitters[i].kind = kind; GTA._emitters[i].age = 0; GTA._emitters[i].dur = dur || null; return; } }
+        GTA._emitters.push({ car: car, kind: kind, t: 0, age: 0, dur: dur || null });
     };
     GTA._updateEmitters = function (delta) {
         for (var i = GTA._emitters.length - 1; i >= 0; i--) {
             var e = GTA._emitters[i];
             if (!e.car || !e.car.sprite) { GTA._emitters.splice(i, 1); continue; }
+            e.age = (e.age || 0) + delta;
+            if (e.dur && e.age >= e.dur) {
+                if (e.kind === 'fire') { e.kind = 'smoke'; e.age = 0; e.dur = 3; setBurning(e.car, false); tintCar(e.car, 0x0a0a0a); } // fogo apaga -> carcaca + fumaca residual
+                else { GTA._emitters.splice(i, 1); continue; }                     // some -> resta so a carcaca
+            }
+            if (e.kind === 'fire') flickerBurn(e.car); // chamas no corpo tremulam todo frame
             e.t += delta; var iv = (e.kind === 'fire') ? 0.06 : 0.22;
             if (e.t >= iv) {
                 e.t = 0;
@@ -560,8 +594,11 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         if (d === 4 && !car._destroyed) { GTA._spawnFx(car, 'smoke', 3); GTA._registerEmitter(car, 'smoke'); }
         if (d >= 8 && !car._destroyed) {
             car._destroyed = true;
-            explosion(car); GTA._registerEmitter(car, 'fire');
-            tintCar(car, 0x1e1e1e); // carbonizado
+            explosion(car);            // 1) bola de fogo
+            crumple(car, 1);           // amasso maximo
+            tintCar(car, 0x1a1410);    // 2) escurecendo, ainda queimando
+            setBurning(car, true);     //    chamas no corpo do carro
+            GTA._registerEmitter(car, 'fire', 4.5); // queima ~4.5s -> 3) carcaca carbonizada (em _updateEmitters)
             try { if (car.physics) car.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0)); } catch (e) {}
         }
     };
