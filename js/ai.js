@@ -418,37 +418,73 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
             return true;
         } catch (e) { return false; }
     };
+    GTA._fx = GTA._fx || [];
+    // Material clonado por carro (material e compartilhado com peds/player; clonar evita
+    // tingir todos). Usado p/ escurecer o carro conforme o dano (simula fuligem/amassado).
+    function tintCar(car, hex) {
+        try {
+            var s = car.sprite; if (!s || !s.material) return;
+            if (!s._dmgMatCloned) { s.material = s.material.clone(); s._dmgMatCloned = true; }
+            s.material.color.setHex(hex);
+        } catch (e) {}
+    }
+    // "Amassado": leve deformacao assimetrica do sprite do carro
+    function crumple(car, amt) {
+        try { var s = car.sprite; if (!s) return; s.scale.set(1 - amt*0.10*rnd(0.6,1.0), 1 - amt*0.10*rnd(0.6,1.0), 1); } catch (e) {}
+    }
     GTA._addDents = function (car, n) {
         if (!car || !car.sprite) return;
         var host = car.sprite, w = (car.width || 40), h = (car.height || 80);
         car._dents = car._dents || [];
+        if (car._dents.length > 10) return;
         for (var i = 0; i < n; i++) {
             try {
-                var s = rnd(0.12, 0.24);
-                var mark = mkQuad(w * s, h * s * rnd(0.6, 1.3), 0x080808, rnd(0.5, 0.8));
-                mark.position.set(rnd(-w*0.34, w*0.34), rnd(-h*0.42, h*0.42), 1 + car._dents.length * 0.03);
+                var s = rnd(0.09, 0.17);
+                // marcas pequenas, cinza-escuro e translucidas (arranhoes/amassados, nao blocos pretos)
+                var mark = mkQuad(w * s, h * s * rnd(0.6, 1.2), (Math.random() < 0.5 ? 0x161616 : 0x2c2c2c), rnd(0.20, 0.36));
+                mark.position.set(rnd(-w*0.32, w*0.32), rnd(-h*0.40, h*0.40), 1 + car._dents.length * 0.02);
                 mark.rotation.z = rnd(0, Math.PI);
                 host.add(mark); car._dents.push(mark);
             } catch (e) {}
         }
     };
-    GTA._fx = GTA._fx || [];
     GTA._spawnFx = function (car, kind, count) {
         if (!car || !car.sprite || !window._gtaGame) return;
         var scene = window._gtaGame.scene;
         var px = car.sprite.position.x, py = car.sprite.position.y, pz = car.sprite.position.z;
         for (var i = 0; i < count; i++) {
             try {
-                var fire = (kind === 'fire');
-                var sz = fire ? rnd(10, 22) : rnd(14, 28);
-                var col = fire ? (Math.random() < 0.5 ? 0xff6a00 : 0xffcc00) : (Math.random() < 0.5 ? 0x1c1c1c : 0x4a4a4a);
-                var p = mkQuad(sz, sz, col, fire ? 0.9 : 0.55);
-                p.position.set(px + rnd(-10, 10), py + rnd(-10, 10), pz + 6 + rnd(0, 8));
-                scene.add(p);
-                GTA._fx.push({ mesh: p, life: 0, max: fire ? rnd(0.4, 0.8) : rnd(0.9, 1.7), vy: rnd(14, 34), vx: rnd(-7, 7), grow: fire ? rnd(0.5, 1.0) : rnd(1.0, 2.2), o0: fire ? 0.9 : 0.55 });
+                if (kind === 'fire') {
+                    var r = Math.random();
+                    var col = r < 0.4 ? 0xff3300 : (r < 0.75 ? 0xff8a00 : 0xffd24a); // vermelho->laranja->amarelo
+                    var sz = rnd(6, 14);
+                    var p = mkQuad(sz, sz, col, 0.85); p.material.blending = T.AdditiveBlending;
+                    p.position.set(px + rnd(-9, 9), py + rnd(-9, 9), pz + 8 + rnd(0, 6));
+                    scene.add(p);
+                    GTA._fx.push({ mesh: p, life: 0, max: rnd(0.32, 0.58), vy: rnd(26, 52), vx: rnd(-10, 10), grow: rnd(-0.4, 0.2), o0: 0.85, flick: true });
+                } else if (kind === 'spark') {
+                    var sp = mkQuad(rnd(2, 4), rnd(2, 4), 0xffe070, 1); sp.material.blending = T.AdditiveBlending;
+                    sp.position.set(px + rnd(-6, 6), py + rnd(-6, 6), pz + 10);
+                    scene.add(sp);
+                    GTA._fx.push({ mesh: sp, life: 0, max: rnd(0.25, 0.5), vy: rnd(40, 95), vx: rnd(-45, 45), grow: -0.6, o0: 1, flick: true });
+                } else {
+                    var ss = rnd(14, 26);
+                    var sm = mkQuad(ss, ss, (Math.random() < 0.5 ? 0x191919 : 0x3a3a3a), 0.4);
+                    sm.position.set(px + rnd(-8, 8), py + rnd(-8, 8), pz + 14 + rnd(0, 10));
+                    scene.add(sm);
+                    GTA._fx.push({ mesh: sm, life: 0, max: rnd(1.0, 1.8), vy: rnd(16, 30), vx: rnd(-8, 8), grow: rnd(1.2, 2.4), o0: 0.4 });
+                }
             } catch (e) {}
         }
     };
+    function explosion(car) {
+        if (!car || !car.sprite || !window._gtaGame) return;
+        var s = car.sprite, px = s.position.x, py = s.position.y, pz = s.position.z;
+        var fl = mkQuad(72, 72, 0xffee88, 0.95); fl.material.blending = T.AdditiveBlending;
+        fl.position.set(px, py, pz + 20); window._gtaGame.scene.add(fl);
+        GTA._fx.push({ mesh: fl, life: 0, max: 0.32, vy: 0, vx: 0, grow: 1.9, o0: 0.95 });
+        GTA._spawnFx(car, 'fire', 16); GTA._spawnFx(car, 'spark', 16); GTA._spawnFx(car, 'smoke', 6);
+    }
     GTA._updateFx = function (delta) {
         if (!GTA._fx.length || !window._gtaGame) return;
         var scene = window._gtaGame.scene;
@@ -456,8 +492,9 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
             var f = GTA._fx[i]; f.life += delta; var t = f.life / f.max;
             if (t >= 1) { try { scene.remove(f.mesh); } catch (e) {} GTA._fx.splice(i, 1); continue; }
             f.mesh.position.y += f.vy * delta; f.mesh.position.x += f.vx * delta;
-            var sc = 1 + f.grow * t; f.mesh.scale.set(sc, sc, 1);
-            f.mesh.material.opacity = f.o0 * (1 - t);
+            var sc = Math.max(0.05, 1 + f.grow * t); f.mesh.scale.set(sc, sc, 1);
+            var o = f.o0 * (1 - t); if (f.flick) o *= (0.65 + Math.random() * 0.35);
+            f.mesh.material.opacity = o;
         }
     };
     GTA._emitters = GTA._emitters || [];
@@ -469,22 +506,32 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         for (var i = GTA._emitters.length - 1; i >= 0; i--) {
             var e = GTA._emitters[i];
             if (!e.car || !e.car.sprite) { GTA._emitters.splice(i, 1); continue; }
-            e.t += delta; var iv = (e.kind === 'fire') ? 0.09 : 0.20;
-            if (e.t >= iv) { e.t = 0; GTA._spawnFx(e.car, e.kind === 'fire' ? 'fire' : 'smoke', e.kind === 'fire' ? 2 : 1); }
+            e.t += delta; var iv = (e.kind === 'fire') ? 0.06 : 0.22;
+            if (e.t >= iv) {
+                e.t = 0;
+                if (e.kind === 'fire') { GTA._spawnFx(e.car, 'fire', 3); if (Math.random() < 0.4) GTA._spawnFx(e.car, 'smoke', 1); }
+                else { GTA._spawnFx(e.car, 'smoke', 1); }
+            }
         }
     };
     GTA._applyDamage = function (car, game) {
         if (!car || !car.sprite) return;
         var now = (window.performance && performance.now) ? performance.now() : Date.now();
-        if (car._dmgCd && now - car._dmgCd < 600) return;
+        if (car._dmgCd && now - car._dmgCd < 800) return;   // mais lento: nao pega fogo a toa
         car._dmgCd = now; car._dmg = (car._dmg || 0) + 1;
-        if (car._dmg === 1) { GTA._addDents(car, 2); }
-        else if (car._dmg === 2) { GTA._addDents(car, 3); }
-        else if (car._dmg === 3) { GTA._addDents(car, 4); GTA._spawnFx(car, 'smoke', 4); GTA._registerEmitter(car, 'smoke'); }
-        else if (car._dmg >= 4 && !car._destroyed) {
-            car._destroyed = true; GTA._addDents(car, 5);
-            GTA._spawnFx(car, 'fire', 10); GTA._registerEmitter(car, 'fire');
-            try { var mesh = (car.sprite.material) ? car.sprite : (car.sprite.sprite || car.sprite); if (mesh && mesh.material) { mesh.material = mesh.material.clone(); mesh.material.color = new T.Color(0x2a2a2a); } } catch (e) {}
+        var d = car._dmg;
+        if (!car._destroyed && d <= 7) {
+            // amassa + escurece progressivamente (sem blocos pretos)
+            GTA._addDents(car, d <= 2 ? 1 : 2);
+            crumple(car, Math.min(1, d / 8));
+            var k = Math.max(0.45, 1 - d * 0.09); var c = Math.round(0xff * k);
+            tintCar(car, (c << 16) | (c << 8) | c);
+        }
+        if (d === 4 && !car._destroyed) { GTA._spawnFx(car, 'smoke', 3); GTA._registerEmitter(car, 'smoke'); }
+        if (d >= 8 && !car._destroyed) {
+            car._destroyed = true;
+            explosion(car); GTA._registerEmitter(car, 'fire');
+            tintCar(car, 0x1e1e1e); // carbonizado
             try { if (car.physics) car.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0)); } catch (e) {}
         }
     };
