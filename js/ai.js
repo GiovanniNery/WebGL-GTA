@@ -158,6 +158,7 @@ GTA.spawnAICars = function ( game ) {
 GTA.updateAICars = function ( delta ) {
     GTA.aiCarsPath.forEach(function ( car ) {
         var p = car._path;
+        if (car._destroyed) { GTA._placeAICar(car); return; } // destroco: para no lugar (o fogo fica nele)
         p.progress += p.speed * delta * (p.dir || 1);
         if (p.isRing) {
             // Anel de intersecao: loop continuo, sem teleporte.
@@ -586,6 +587,13 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         for (var i = GTA._emitters.length - 1; i >= 0; i--) {
             var e = GTA._emitters[i];
             if (!e.car || !e.car.sprite) { GTA._emitters.splice(i, 1); continue; }
+            // destroco fisico (carro batido): mantem parado p/ o fogo nao ficar pra tras
+            if (e.car._destroyed && e.car.physics) {
+                var _g = window._gtaGame;
+                if (!(_g && _g.player && _g.player.currentCar === e.car)) {
+                    try { e.car.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0)); } catch (er) {}
+                }
+            }
             e.age = (e.age || 0) + delta;
             if (e.dur && e.age >= e.dur) {
                 if (e.kind === 'fire') { e.kind = 'smoke'; e.age = 0; e.dur = 3; setBurning(e.car, false); tintCar(e.car, 0x0a0a0a); } // fogo apaga -> carcaca + fumaca residual
