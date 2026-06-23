@@ -404,6 +404,25 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         var m = new T.MeshBasicMaterial({ color: color, transparent: true, opacity: opacity, depthTest: false, side: T.DoubleSide });
         return new T.Mesh(quadXY(w, h), m);
     }
+    // Textura de brilho radial (centro claro -> bordas transparentes): transforma os
+    // quads quadrados em "blobs" macios -> fogo/fumaca/faiscas deixam de parecer cubos.
+    var GLOW = (function () {
+        try {
+            var c = document.createElement('canvas'); c.width = c.height = 64;
+            var ctx = c.getContext('2d');
+            var g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            g.addColorStop(0, 'rgba(255,255,255,1)');
+            g.addColorStop(0.45, 'rgba(255,255,255,0.55)');
+            g.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 64);
+            var tex = new T.Texture(c); tex.needsUpdate = true; return tex;
+        } catch (e) { return null; }
+    })();
+    // Blob macio. additive=true (padrao) p/ fogo/faisca; additive=false p/ fumaca escura.
+    function glowQuad(w, h, color, opacity, additive) {
+        var m = new T.MeshBasicMaterial({ map: GLOW, color: color, transparent: true, opacity: opacity, depthTest: false, blending: (additive === false ? T.NormalBlending : T.AdditiveBlending) });
+        return new T.Mesh(quadXY(w, h), m);
+    }
     if (typeof GTA.disableAICar !== 'function') {
         GTA.disableAICar = function (car) { var i = GTA.aiCarsPath.indexOf(car); if (i >= 0) GTA.aiCarsPath.splice(i, 1); };
     }
@@ -441,8 +460,7 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
             var w = (car.width || 40), h = (car.height || 80);
             for (var i = 0; i < 6; i++) {
                 try {
-                    var q = mkQuad(w * rnd(0.30, 0.52), h * rnd(0.20, 0.40), (Math.random() < 0.5 ? 0xff7a00 : 0xffd24a), 0.7);
-                    q.material.blending = T.AdditiveBlending;
+                    var q = glowQuad(w * rnd(0.34, 0.58), h * rnd(0.24, 0.44), (Math.random() < 0.5 ? 0xff7a00 : 0xffd24a), 0.7);
                     q.position.set(rnd(-w*0.28, w*0.28), rnd(-h*0.40, h*0.40), 2 + i * 0.05);
                     q.rotation.z = rnd(0, Math.PI);
                     s.add(q); car._burn.push(q);
@@ -485,22 +503,22 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
                 if (kind === 'fire') {
                     var r = Math.random();
                     var col = r < 0.4 ? 0xff3300 : (r < 0.75 ? 0xff8a00 : 0xffd24a); // vermelho->laranja->amarelo
-                    var sz = rnd(6, 14);
-                    var p = mkQuad(sz, sz, col, 0.85); p.material.blending = T.AdditiveBlending;
-                    p.position.set(px + rnd(-9, 9), py + rnd(-9, 9), pz + 8 + rnd(0, 6));
+                    var sz = rnd(12, 22);   // blob macio (a textura faz o fade nas bordas)
+                    var p = glowQuad(sz, sz, col, 0.7);
+                    p.position.set(px + rnd(-8, 8), py + rnd(-8, 8), pz + 8 + rnd(0, 6));
                     scene.add(p);
-                    GTA._fx.push({ mesh: p, life: 0, max: rnd(0.32, 0.58), vy: rnd(26, 52), vx: rnd(-10, 10), grow: rnd(-0.4, 0.2), o0: 0.85, flick: true });
+                    GTA._fx.push({ mesh: p, life: 0, max: rnd(0.32, 0.58), vy: rnd(26, 52), vx: rnd(-10, 10), grow: rnd(-0.3, 0.3), o0: 0.7, flick: true });
                 } else if (kind === 'spark') {
-                    var sp = mkQuad(rnd(2, 4), rnd(2, 4), 0xffe070, 1); sp.material.blending = T.AdditiveBlending;
+                    var sp = glowQuad(rnd(4, 7), rnd(4, 7), 0xffe070, 1);
                     sp.position.set(px + rnd(-6, 6), py + rnd(-6, 6), pz + 10);
                     scene.add(sp);
                     GTA._fx.push({ mesh: sp, life: 0, max: rnd(0.25, 0.5), vy: rnd(40, 95), vx: rnd(-45, 45), grow: -0.6, o0: 1, flick: true });
                 } else {
-                    var ss = rnd(14, 26);
-                    var sm = mkQuad(ss, ss, (Math.random() < 0.5 ? 0x191919 : 0x3a3a3a), 0.4);
+                    var ss = rnd(18, 32);
+                    var sm = glowQuad(ss, ss, (Math.random() < 0.5 ? 0x202020 : 0x3a3a3a), 0.5, false); // fumaca: blob escuro macio
                     sm.position.set(px + rnd(-8, 8), py + rnd(-8, 8), pz + 14 + rnd(0, 10));
                     scene.add(sm);
-                    GTA._fx.push({ mesh: sm, life: 0, max: rnd(1.0, 1.8), vy: rnd(16, 30), vx: rnd(-8, 8), grow: rnd(1.2, 2.4), o0: 0.4 });
+                    GTA._fx.push({ mesh: sm, life: 0, max: rnd(1.0, 1.8), vy: rnd(16, 30), vx: rnd(-8, 8), grow: rnd(1.2, 2.4), o0: 0.5 });
                 }
             } catch (e) {}
         }
@@ -512,7 +530,7 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         var scene = window._gtaGame.scene;
         function blob(col, sz, op, max, spread, grow, vy) {
             var ang = rnd(0, Math.PI*2), r = rnd(0, spread);
-            var q = mkQuad(sz, sz, col, op); q.material.blending = T.AdditiveBlending;
+            var q = glowQuad(sz, sz, col, op);
             q.position.set(px + Math.cos(ang)*r, py + Math.sin(ang)*r, pz + 18 + rnd(0,8));
             q.rotation.z = rnd(0, Math.PI);
             scene.add(q);
@@ -534,14 +552,18 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
     GTA._impactStar = function (x, y, z) {
         if (!window._gtaGame) return;
         var scene = window._gtaGame.scene; z = (z || 128) + 22;
+        // nucleo de brilho macio
+        var core = glowQuad(16, 16, 0xfff0a0, 1);
+        core.position.set(x, y, z); scene.add(core);
+        GTA._fx.push({ mesh: core, life: 0, max: 0.18, vy: 0, vx: 0, grow: 1.2, o0: 1 });
+        // raios finos e curtos (flash rapido)
         function ray(w, h, rot) {
             var q = mkQuad(w, h, 0xffe24a, 1); q.material.blending = T.AdditiveBlending;
-            q.position.set(x, y, z); q.rotation.z = rot; scene.add(q);
-            GTA._fx.push({ mesh: q, life: 0, max: rnd(0.16, 0.26), vy: 0, vx: 0, grow: 0.7, o0: 1 });
+            q.position.set(x, y, z + 0.1); q.rotation.z = rot; scene.add(q);
+            GTA._fx.push({ mesh: q, life: 0, max: rnd(0.12, 0.18), vy: 0, vx: 0, grow: 0.5, o0: 1 });
         }
-        ray(26, 5, 0); ray(26, 5, Math.PI/2);            // +
-        ray(18, 4, Math.PI/4); ray(18, 4, -Math.PI/4);   // x
-        GTA._spawnFx({ sprite: { position: { x: x, y: y, z: z } } }, 'spark', 6);
+        ray(15, 3, 0); ray(15, 3, Math.PI/2); ray(11, 2.5, Math.PI/4); ray(11, 2.5, -Math.PI/4);
+        GTA._spawnFx({ sprite: { position: { x: x, y: y, z: z } } }, 'spark', 5);
     };
     GTA._updateFx = function (delta) {
         if (!GTA._fx.length || !window._gtaGame) return;
