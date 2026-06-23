@@ -604,9 +604,9 @@ function loopPickups() {
 // Personagens distintos por COR (tint no material clonado do player; nao afeta peds).
 var GTA_chars = [
     { nome: 'ORIGINAL', cor: '#cfcfcf', hex: 0xffffff },
-    { nome: 'VERMELHO', cor: '#e24b4b', hex: 0xff7a7a },
-    { nome: 'AZUL',     cor: '#4b7be2', hex: 0x82a4ff },
-    { nome: 'VERDE',    cor: '#46c46e', hex: 0x86e2a0 }
+    { nome: 'VERMELHO', cor: '#e23b3b', hex: 0xff4d4d },
+    { nome: 'AZUL',     cor: '#3b6fe2', hex: 0x4d7fff },
+    { nome: 'VERDE',    cor: '#2fb84f', hex: 0x4dd45e }
 ];
 var GTA_charPick = null;   // indice escolhido
 var GTA_loadDone = false;
@@ -671,15 +671,21 @@ function iniciarJogo() {
 }
 
 function aplicarPersonagem(hex) {
-    var g = window._gtaGame;
-    if (!g || !g.player || !g.player.sprite || !g.player.sprite.material) return;
-    try {
-        // Clona o material (compartilhado com peds) e tinge SO o player.
-        var nm = g.player.sprite.material.clone();
-        nm.color.setHex(hex);
-        nm.depthTest = false; // mantem o fix: player sempre na frente
-        g.player.sprite.material = nm;
-    } catch (e) {}
+    // Reaplica algumas vezes no inicio: o material e compartilhado com peds, entao
+    // clonamos so o do player; reaplicar evita perder o tint se algo recriar o sprite.
+    var tentativas = 0;
+    (function ap() {
+        var g = window._gtaGame;
+        if (g && g.player && g.player.sprite && g.player.sprite.material) {
+            try {
+                var spr = g.player.sprite;
+                if (!spr._charMatCloned) { spr.material = spr.material.clone(); spr._charMatCloned = true; }
+                spr.material.color.setHex(hex);
+                spr.material.depthTest = false; // player sempre na frente
+            } catch (e) {}
+        }
+        if (tentativas++ < 6) setTimeout(ap, 250);
+    })();
 }
 
 function comecarJogo() {
