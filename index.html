@@ -275,6 +275,19 @@ function adicionarDinheiro(valor) {
     atualizarHUD();
 }
 
+/* Player morreu (carro explodiu com ele dentro) — chamado por ai.js GTA._killPlayer */
+window.GTA_onPlayerMorto = function() {
+    GTA_health = 0;
+    atualizarHUD();
+    mostrarNotificacao('VOCE MORREU');
+    setTimeout(function() {
+        GTA_health = 5;
+        atualizarHUD();
+        if (window.GTA && GTA._revivePlayer) GTA._revivePlayer();
+        mostrarNotificacao('RESPAWN');
+    }, 3500);
+};
+
 /* Mortes (tiro/atropelamento) geram procurado — chamado por ai.js GTA._killPed */
 var GTA_mortes = 0;
 window.GTA_registrarMorte = function(cause) {
