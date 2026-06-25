@@ -594,6 +594,11 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
                     try { e.car.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0)); } catch (er) {}
                 }
             }
+            // PAVIO: carro pegando fogo explode sozinho apos _fuse segundos
+            if (e.car._onFire && !e.car._destroyed && e.car._fuse != null) {
+                e.car._fuse -= delta;
+                if (e.car._fuse <= 0) detonate(e.car);
+            }
             e.age = (e.age || 0) + delta;
             if (e.dur && e.age >= e.dur) {
                 if (e.kind === 'fire') { e.kind = 'smoke'; e.age = 0; e.dur = 3; setBurning(e.car, false); tintCar(e.car, 0x0a0a0a); } // fogo apaga -> carcaca + fumaca residual
@@ -608,28 +613,39 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
             }
         }
     };
+    // Detona o carro: bola de fogo -> corpo em chamas (+2s) -> carcaca. Mata o player se estava nele.
+    function detonate(car) {
+        if (!car || !car.sprite || car._destroyed) return;
+        car._destroyed = true;
+        explosion(car);            // bola de fogo
+        crumple(car, 1);           // amasso maximo
+        tintCar(car, 0x1a1410);    // escurecendo, ainda queimando
+        setBurning(car, true);     // chamas no corpo
+        GTA._registerEmitter(car, 'fire', 2.0); // +2s queimando -> fumaca 3s -> carcaca (no _updateEmitters)
+        try { if (car.physics) car.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0)); } catch (e) {}
+        var g = window._gtaGame;
+        if (g && g.player && g.player.inCar && g.player.currentCar === car && typeof GTA._killPlayer === 'function') {
+            GTA._killPlayer();
+        }
+    }
+    GTA.detonateCar = detonate;
     GTA._applyDamage = function (car, game) {
-        if (!car || !car.sprite) return;
+        if (!car || !car.sprite || car._destroyed) return;
         var now = (window.performance && performance.now) ? performance.now() : Date.now();
-        if (car._dmgCd && now - car._dmgCd < 800) return;   // mais lento: nao pega fogo a toa
+        if (car._dmgCd && now - car._dmgCd < 700) return;
         car._dmgCd = now; car._dmg = (car._dmg || 0) + 1;
         var d = car._dmg;
-        if (!car._destroyed && d <= 7) {
-            // amassa + escurece progressivamente (sem blocos pretos)
-            GTA._addDents(car, d <= 2 ? 1 : 2);
-            crumple(car, Math.min(1, d / 8));
-            var k = Math.max(0.45, 1 - d * 0.09); var c = Math.round(0xff * k);
-            tintCar(car, (c << 16) | (c << 8) | c);
-        }
-        if (d === 4 && !car._destroyed) { GTA._spawnFx(car, 'smoke', 3); GTA._registerEmitter(car, 'smoke'); }
-        if (d >= 8 && !car._destroyed) {
-            car._destroyed = true;
-            explosion(car);            // 1) bola de fogo
-            crumple(car, 1);           // amasso maximo
-            tintCar(car, 0x1a1410);    // 2) escurecendo, ainda queimando
-            setBurning(car, true);     //    chamas no corpo do carro
-            GTA._registerEmitter(car, 'fire', 4.5); // queima ~4.5s -> 3) carcaca carbonizada (em _updateEmitters)
-            try { if (car.physics) car.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0)); } catch (e) {}
+        // amassa + escurece progressivamente (rampa)
+        GTA._addDents(car, d <= 2 ? 1 : 2);
+        crumple(car, Math.min(1, d / 6));
+        var k = Math.max(0.45, 1 - d * 0.10); var c = Math.round(0xff * k);
+        tintCar(car, (c << 16) | (c << 8) | c);
+        // hit 5: PEGA FOGO e acende o pavio -> queima e explode sozinho (estilo GTA1)
+        if (d >= 5 && !car._onFire) {
+            car._onFire = true;
+            setBurning(car, true);
+            GTA._registerEmitter(car, 'fire'); // sem dur: queima ate o pavio estourar
+            car._fuse = 2.5;                   // explode em ~2.5s
         }
     };
     GTA._aiCarCollisions = function () {
@@ -745,6 +761,23 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         try { window._gtaGame.scene.remove(ped); } catch (e) {}
         var i = GTA.aiPedestrians.indexOf(ped); if (i >= 0) GTA.aiPedestrians.splice(i, 1);
         if (typeof window.GTA_registrarMorte === 'function') { try { window.GTA_registrarMorte(cause); } catch (e) {} }
+    };
+
+    // --- Morte do player (carro explodiu com ele dentro) ---
+    GTA._killPlayer = function () {
+        var g = window._gtaGame; if (!g || !g.player || g.player._dead) return;
+        var p = g.player; p._dead = true;
+        var px = p.position.x, py = p.position.y;
+        p.inCar = false; p.currentCar = null;
+        try { if (p.sprite) { p.sprite.visible = true; p.sprite.rotation.z = (p.sprite.rotation.z || 0) + Math.PI / 2; } } catch (e) {} // corpo deitado
+        try { if (p.physics) p.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0)); } catch (e) {}
+        spawnBlood(px, py); spawnBlood(px + rnd(-12, 12), py + rnd(-12, 12)); // poca de sangue do lado
+        if (typeof window.GTA_onPlayerMorto === 'function') { try { window.GTA_onPlayerMorto(); } catch (e) {} }
+    };
+    GTA._revivePlayer = function () {
+        var g = window._gtaGame; if (!g || !g.player) return;
+        var p = g.player; p._dead = false;
+        try { if (p.sprite) p.sprite.rotation.z = 0; } catch (e) {}
     };
 
     // --- Atropelamento: carro do player em movimento mata peds que toca ---

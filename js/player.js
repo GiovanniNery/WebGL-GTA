@@ -264,6 +264,7 @@ GTA.Player.prototype.updateOnFoot = function ( delta ) {
 
 // ââ Update principal ââââââââââââââââââââââââââââââââââââââââââ
 GTA.Player.prototype.update = function ( delta ) {
+    if (this._dead) return; // morto: corpo fica parado no chao
     if (!this._isPlayer) {
         _pedOrigUpdate.call(this, delta);
         return;
