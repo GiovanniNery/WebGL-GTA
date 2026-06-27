@@ -424,6 +424,7 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         var m = new T.MeshBasicMaterial({ map: GLOW, color: color, transparent: true, opacity: opacity, depthTest: false, blending: (additive === false ? T.NormalBlending : T.AdditiveBlending) });
         return new T.Mesh(quadXY(w, h), m);
     }
+    GTA._glowQuad = glowQuad; // exposto p/ o bloco de combate (sangue redondo)
     if (typeof GTA.disableAICar !== 'function') {
         GTA.disableAICar = function (car) { var i = GTA.aiCarsPath.indexOf(car); if (i >= 0) GTA.aiCarsPath.splice(i, 1); };
     }
@@ -730,10 +731,21 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         var fl = quad(10, 10, 0xffffaa, 0.95); fl.position.set(mx, my, 150); addFx(fl, { max:0.10, grow:0.6 });
     }
     function spawnBlood(x, y) {
-        var splat = quad(rnd(24,34), rnd(24,34), 0x6a0000, 0.6); splat.position.set(x, y, 120); splat.rotation.z = rnd(0, 3.14); addFx(splat, { max:6.0, hold:0.7 });
+        // Poca redonda escura (textura de brilho radial em cor de sangue, blending normal) -> mancha macia, nao quadrado
+        var gq = GTA._glowQuad;
+        if (gq) {
+            var pool = gq(rnd(36, 50), rnd(36, 50), 0x5a0000, 0.78, false);
+            pool.position.set(x, y, 119); pool.rotation.z = rnd(0, 3.14);
+            addFx(pool, { max: 10.0, hold: 0.88 });            // fica bastante tempo, depois desbota
+            var pool2 = gq(rnd(20, 30), rnd(20, 30), 0x7a0000, 0.7, false);
+            pool2.position.set(x + rnd(-12, 12), y + rnd(-12, 12), 119.4); pool2.rotation.z = rnd(0, 3.14);
+            addFx(pool2, { max: 9.0, hold: 0.88 });
+        }
+        // respingos pequenos que saem no impacto
         for (var i = 0; i < 8; i++) {
-            var p = quad(rnd(5,10), rnd(5,10), (Math.random()<0.5?0x8b0000:0xb00000), 0.85);
-            p.position.set(x+rnd(-4,4), y+rnd(-4,4), 140); addFx(p, { max:rnd(0.4,0.8), vx:rnd(-30,30), vy:rnd(-30,30), grow:0.4 });
+            var p = gq ? gq(rnd(5, 9), rnd(5, 9), (Math.random() < 0.5 ? 0x8b0000 : 0xb00000), 0.85, false)
+                       : quad(rnd(5, 9), rnd(5, 9), 0x8b0000, 0.85);
+            p.position.set(x + rnd(-4, 4), y + rnd(-4, 4), 130); addFx(p, { max: rnd(0.4, 0.8), vx: rnd(-30, 30), vy: rnd(-30, 30), grow: 0.4 });
         }
     }
 
