@@ -630,7 +630,7 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         if (g && g.player && !g.player._dead && typeof GTA._killPlayer === 'function') {
             var inThis = g.player.inCar && g.player.currentCar === car;
             var ddx = g.player.position.x - car.sprite.position.x, ddy = g.player.position.y - car.sprite.position.y;
-            var near = (ddx*ddx + ddy*ddy) < 70*70; // raio da explosao
+            var near = (ddx*ddx + ddy*ddy) < 115*115; // raio da explosao (antes 70 = quase encostado, nao matava "perto")
             if (inThis || near) GTA._killPlayer();
         }
     }
@@ -733,17 +733,18 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         var gq = GTA._glowQuad;
         // "pingos" cinzas seguidos na direcao do tiro (estilo GTA1). Pistola = poucos por
         // tiro; metralhadora = varios tiros/seg -> linha continua de pingos.
-        var step = 18, n = Math.min(8, Math.floor(len/step));
+        var step = 16, n = Math.min(10, Math.floor(len/step));
         for (var i = 0; i <= n; i++) {
             var d = 6 + i*step + rnd(-2, 2);
-            var puff = gq ? gq(rnd(4, 7), rnd(4, 7), (Math.random() < 0.5 ? 0xc8c8c8 : 0x9a9a9a), 0.6, false)
-                          : quad(rnd(4, 7), rnd(4, 7), 0xc8c8c8, 0.6);
+            // pingos maiores/mais claros/mais opacos -> tiro bem visivel (antes quase transparente)
+            var puff = gq ? gq(rnd(7, 11), rnd(7, 11), (Math.random() < 0.5 ? 0xf4f4f4 : 0xc0c0c0), 0.95, false)
+                          : quad(rnd(7, 11), rnd(7, 11), 0xf4f4f4, 0.95);
             puff.position.set(mx + ux*d + rnd(-2, 2), my + uy*d + rnd(-2, 2), 150);
-            addFx(puff, { max: rnd(0.12, 0.26), grow: 0.5 });
+            addFx(puff, { max: rnd(0.22, 0.42), grow: 0.45 });
         }
         // flash curto na boca da arma
-        var fl = gq ? gq(11, 11, 0xfff0b0, 0.9) : quad(11, 11, 0xffffaa, 0.95);
-        fl.position.set(mx, my, 151); addFx(fl, { max: 0.09, grow: 0.7 });
+        var fl = gq ? gq(15, 15, 0xfff0b0, 1) : quad(15, 15, 0xffffaa, 1);
+        fl.position.set(mx, my, 151); addFx(fl, { max: 0.1, grow: 0.7 });
     }
     function spawnBlood(x, y) {
         // Poca redonda escura (textura de brilho radial em cor de sangue, blending normal) -> mancha macia, nao quadrado
@@ -771,8 +772,9 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         // Mira na frente VISUAL do sprite (nose = +Y girado por sprite.rotation.z),
         // senao o tiro saia espelhado/ao contrario da direcao que o player aponta.
         var rot = p.sprite ? p.sprite.rotation.z : (p.physics ? -p.physics.GetAngle() : 0);
-        // Sprite do ped aponta pra -Y por padrao -> frente = (sin, -cos). Antes saia espelhado.
-        var ax = Math.sin(rot), ay = -Math.cos(rot);
+        // A "frente visual" do sprite eh o OPOSTO da direcao de movimento (o sprite eh
+        // desenhado apontando ao contrario). Tiro saia pelas costas com (sin,-cos) -> invertido.
+        var ax = -Math.sin(rot), ay = Math.cos(rot);
         var mx = p.position.x + ax*16, my = p.position.y + ay*16;
         var range = 520, hitT = range, hitPed = null, hitCar = null;
         function test(tx, ty, radius) {

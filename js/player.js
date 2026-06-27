@@ -106,7 +106,7 @@ GTA.Player.prototype.enterNearestCar = function () {
     if (!cars || cars.length === 0) return;
 
     var nearest = null;
-    var nearestDist = 250;
+    var nearestDist = 100; // tem que estar encostado no carro pra roubar (antes 250 = longe demais)
     var px = this.position.x;
     var py = this.position.y;
 
