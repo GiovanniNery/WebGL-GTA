@@ -80,7 +80,7 @@ GTA.disableAICar = function ( car ) {
 };
 
 GTA._aiPass = function ( game ) {
-    var WIN = 24, REG = 7, MAX = 95, CARS_PER = 3, RECYCLE = 4500, OFFSCR = 520, EXT = 40;
+    var WIN = 24, REG = 7, MAX = 70, CARS_PER = 2, RECYCLE = 4500, OFFSCR = 700, EXT = 40;
     var base = game.map.base, used = GTA._aiUsedBuckets;
     var cam = game.camera.position, cx = cam.x, cy = cam.y;
     for (var i = GTA.aiCarsPath.length - 1; i >= 0; i--) { var c = GTA.aiCarsPath[i]; var dx = c.sprite.position.x - cx, dy = c.sprite.position.y - cy; if (Math.sqrt(dx*dx+dy*dy) > RECYCLE) { try { game.scene.remove(c.sprite); } catch (e) {} if (c._bk) delete used[c._bk]; GTA.aiCarsPath.splice(i, 1); } }
@@ -94,8 +94,21 @@ GTA._aiPass = function ( game ) {
     var rc = Math.round(cx/64), rr0 = -Math.round(cy/64);
     var C0 = Math.max(3, rc-WIN), C1 = Math.min(251, rc+WIN), R0 = Math.max(3, rr0-WIN), R1 = Math.min(252, rr0+WIN);
     var H = [], V = [];
-    for (var r = R0; r <= R1; r++) { var c = C0; while (c < C1) { if (road(c,r) && road(c,r+1)) { var c0 = c; while (c < C1 && road(c,r) && road(c,r+1)) c++; if ((c-c0) >= 4) H.push({ r:r, c0:c0, c1:c-1, len:c-c0 }); } else c++; } }
-    for (var cc = C0; cc <= C1; cc++) { var r2 = R0; while (r2 < R1) { if (road(cc,r2) && road(cc+1,r2)) { var r0 = r2; while (r2 < R1 && road(cc,r2) && road(cc+1,r2)) r2++; if ((r2-r0) >= 4) V.push({ c:cc, r0:r0, r1:r2-1, len:r2-r0 }); } else r2++; } }
+    // Corredor (par de linhas r,r+1) consome a faixa-de-baixo (r+1): proxima faixa comeca em r+2.
+    // Assim uma pista LARGA vira N corredores SEM sobreposicao (faixas limpas) em vez de N-1 runs
+    // empilhados/atravessados. Inerte numa rua de 2 tiles (r+2 nao e' asfalto). Idem vertical.
+    var _hcl = {};
+    for (var r = R0; r <= R1; r++) { var c = C0; while (c < C1) { if (road(c,r) && road(c,r+1) && !_hcl[c+'_'+r]) { var c0 = c; while (c < C1 && road(c,r) && road(c,r+1) && !_hcl[c+'_'+r]) c++; if ((c-c0) >= 4) { H.push({ r:r, c0:c0, c1:c-1, len:c-c0 }); for (var hc = c0; hc < c; hc++) _hcl[hc+'_'+(r+1)] = 1; } } else c++; } }
+    var _vcl = {};
+    for (var cc = C0; cc <= C1; cc++) { var r2 = R0; while (r2 < R1) { if (road(cc,r2) && road(cc+1,r2) && !_vcl[cc+'_'+r2]) { var r0 = r2; while (r2 < R1 && road(cc,r2) && road(cc+1,r2) && !_vcl[cc+'_'+r2]) r2++; if ((r2-r0) >= 4) { V.push({ c:cc, r0:r0, r1:r2-1, len:r2-r0 }); for (var vr = r0; vr < r2; vr++) _vcl[(cc+1)+'_'+vr] = 1; } } else r2++; } }
+    // Remove "runs fantasma": faixas curtas interiores a um bloco de asfalto (pista larga/praca),
+    // cercadas por asfalto nos 2 lados perpendiculares ao longo de TODO o comprimento. Sem isso o
+    // buscador de rotas turva entre as faixas da pista larga (zigue-zague "atravessando").
+    // Inerte em rua normal de 2 tiles (um lado e' predio) -> nao regride a malha comum.
+    function hInterior(h) { if (h.len > 6) return false; for (var ci = h.c0; ci <= h.c1; ci++) if (!(road(ci,h.r-1) && road(ci,h.r+2))) return false; return true; }
+    function vInterior(v) { if (v.len > 6) return false; for (var ri = v.r0; ri <= v.r1; ri++) if (!(road(v.c-1,ri) && road(v.c+2,ri))) return false; return true; }
+    H = H.filter(function (h) { return !hInterior(h); });
+    V = V.filter(function (v) { return !vInterior(v); });
     function bk(r, c) { return Math.floor(r/REG) + '_' + Math.floor(c/REG); }
     for (var i2 = 0; i2 < H.length; i2++) { if (GTA.aiCarsPath.length >= MAX) break; var a = H[i2]; for (var j = 0; j < H.length; j++) { var b = H[j]; var gap = b.r - a.r; if (gap < 4 || gap > 16) continue; var ovL = Math.max(a.c0,b.c0), ovR = Math.min(a.c1,b.c1); if (ovR-ovL < 4) continue; var sides = []; for (var k = 0; k < V.length; k++) { var v = V[k]; if (v.c>=ovL && v.c<=ovR && v.r0<=a.r && v.r1>=b.r) sides.push(v.c); } if (sides.length < 2) continue; var cL = Math.min.apply(0,sides), cR = Math.max.apply(0,sides); if (cR-cL < 4 || cR-cL > 16) continue; var midC = Math.round((cL+cR)/2), midR = Math.round((a.r+b.r)/2); if (road(midC, midR)) continue; var key = bk(a.r, (cL+cR)/2); if (used[key]) continue; var tY = -(64*a.r+32), bY = -(64*b.r+32), lX = 64*cL+32, rX = 64*cR+32; var ring = [[lX,tY],[rX,tY],[rX,bY],[lX,bY],[lX,tY]]; if (valid(ring)) emit(ring, key); } }
     // --- Rotas que andam pela malha e VIRAM nos cruzamentos (grafo de ruas) ---
@@ -156,6 +169,7 @@ GTA.spawnAICars = function ( game ) {
 };
 
 GTA.updateAICars = function ( delta ) {
+    if (delta > 0.05) delta = 0.05; // evita lurch/teleporte: apos o load (~3min) ou tab em background o clock.getDelta() vem gigante
     GTA.aiCarsPath.forEach(function ( car ) {
         var p = car._path;
         if (car._destroyed) { GTA._placeAICar(car); return; } // destroco: para no lugar (o fogo fica nele)
