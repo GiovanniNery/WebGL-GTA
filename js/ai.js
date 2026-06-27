@@ -444,7 +444,9 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
     function tintCar(car, hex) {
         try {
             var s = car.sprite; if (!s || !s.material) return;
-            if (!s._dmgMatCloned) { s.material = s.material.clone(); s._dmgMatCloned = true; }
+            // MeshBasicMaterial NAO tem .clone() neste build do THREE -> cria material novo
+            // com a MESMA textura (so esse carro), senao tingir mexeria em todos.
+            if (!s._dmgMatCloned) { s.material = new T.MeshBasicMaterial({ map: s.material.map, transparent: true }); s._dmgMatCloned = true; }
             s.material.color.setHex(hex);
         } catch (e) {}
     }
@@ -766,10 +768,14 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
     // --- Morte do player (carro explodiu com ele dentro) ---
     GTA._killPlayer = function () {
         var g = window._gtaGame; if (!g || !g.player || g.player._dead) return;
-        var p = g.player; p._dead = true;
+        var p = g.player;
         var px = p.position.x, py = p.position.y;
-        p.inCar = false; p.currentCar = null;
-        try { if (p.sprite) { p.sprite.visible = true; p.sprite.rotation.z = (p.sprite.rotation.z || 0) + Math.PI / 2; } } catch (e) {} // corpo deitado
+        // Ejeta com a logica padrao (reposiciona o corpo fisico ao lado do carro),
+        // senao no respawn o player teleporta p/ onde entrou no carro (parecia reiniciar o jogo).
+        try { if (p.inCar && typeof p.exitCar === 'function') p.exitCar(); else { p.inCar = false; p.currentCar = null; } }
+        catch (e) { p.inCar = false; p.currentCar = null; }
+        p._dead = true;
+        try { if (p.sprite) { p.sprite.visible = true; p.sprite.rotation.z = Math.PI / 2; } } catch (e) {} // corpo deitado
         try { if (p.physics) p.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0)); } catch (e) {}
         spawnBlood(px, py); spawnBlood(px + rnd(-12, 12), py + rnd(-12, 12)); // poca de sangue do lado
         if (typeof window.GTA_onPlayerMorto === 'function') { try { window.GTA_onPlayerMorto(); } catch (e) {} }
