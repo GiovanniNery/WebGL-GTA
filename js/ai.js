@@ -218,10 +218,14 @@ GTA.updateAICars = function ( delta ) {
     for (i = 0; i < n; i++) { var c = list[i]; snap[i] = { x: c.sprite.position.x, y: c.sprite.position.y, hx: c._hx || 0, hy: c._hy || 0, destroyed: !!c._destroyed }; }
     var pcs = GTA.allCars || []; // carro(s) do player como obstaculo (IA nao atravessa)
     for (i = 0; i < pcs.length; i++) { var pc = pcs[i]; if (pc && pc.sprite) snap.push({ x: pc.sprite.position.x, y: pc.sprite.position.y, hx: 0, hy: 0, always: true }); }
+    var _pl = (window._gtaGame || {}).player; // player A PE tambem para o transito a sua frente:
+    if (_pl && !_pl.inCar && !_pl._dead && _pl.position) snap.push({ x: _pl.position.x, y: _pl.position.y, hx: 0, hy: 0, always: true }); // assim ele para o carro e rouba sem ser atropelado
     for (i = 0; i < n; i++) {
         var car = list[i], p = car._path;
-        if (car._destroyed) { GTA._placeAICar(car); continue; } // destroco: para no lugar (o fogo fica nele)
-        if (!GTA._aiBlockedAhead(car, snap, i)) {
+        if (car._destroyed) { car._curSpeed = 0; GTA._placeAICar(car); continue; } // destroco: para no lugar (o fogo fica nele)
+        var blk = GTA._aiBlockedAhead(car, snap, i);
+        car._curSpeed = blk ? 0 : p.speed; // velocidade efetiva (0 se segurando) usada pelo atropelamento do player
+        if (!blk) {
             p.progress += p.speed * delta * (p.dir || 1);
             if (p.isRing) {
                 // Anel de intersecao: loop continuo, sem teleporte.
@@ -896,6 +900,21 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         for (var i = peds.length-1; i >= 0; i--) { var pd = peds[i]; if (!pd || pd._dead) continue; var dx = pd.position.x-cx, dy = pd.position.y-cy; if (dx*dx+dy*dy < R*R) GTA._killPed(pd, 'run'); }
     };
 
+    // --- Atropelamento do PLAYER a pe por carro IA: so morre se o carro vinha em ALTA velocidade ---
+    // Encostao lento NAO mata; e ao parar na frente p/ roubar o carro freia (_curSpeed=0) -> sem morte.
+    // Quem acerta o player de lado/por tras EM ALTA velocidade (fora do cone de frente) atropela.
+    GTA._aiRunOverPlayer = function () {
+        var g = window._gtaGame; if (!g || !g.player) return;
+        var p = g.player; if (p.inCar || p._dead || !p.position) return;
+        var SPDKILL = 52, px = p.position.x, py = p.position.y, cars = GTA.aiCarsPath || [];
+        for (var i = 0; i < cars.length; i++) {
+            var c = cars[i]; if (!c || !c.sprite || c._destroyed) continue;
+            if ((c._curSpeed || 0) < SPDKILL) continue; // lento = so um encostao
+            var dx = c.sprite.position.x - px, dy = c.sprite.position.y - py, R = carRadius(c) + 6;
+            if (dx*dx + dy*dy < R*R) { GTA._killPlayer(); return; }
+        }
+    };
+
     // --- Respawn de peds nas calcadas (type 3) perto do player ---
     GTA._pedRespawnT = 0;
     GTA._pedRespawn = function (game) {
@@ -921,6 +940,7 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
             if (_g && _g.player && _g.player.inCar && _g.player.currentCar && _g.player.currentCar._destroyed && !_g.player._dead) GTA._killPlayer();
         } catch (e) {}
         try { GTA._runOverCheck(); } catch (e) {}
+        try { GTA._aiRunOverPlayer(); } catch (e) {}
         GTA._pedRespawnT += delta;
         if (GTA._pedRespawnT > 2) { GTA._pedRespawnT = 0; try { if (window._gtaGame) GTA._pedRespawn(window._gtaGame); } catch (e) {} }
     };
