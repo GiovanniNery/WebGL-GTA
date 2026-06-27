@@ -692,7 +692,8 @@ function aplicarPersonagem(hex) {
         if (g && g.player && g.player.sprite && g.player.sprite.material) {
             try {
                 var spr = g.player.sprite;
-                if (!spr._charMatCloned) { spr.material = spr.material.clone(); spr._charMatCloned = true; }
+                // MeshBasicMaterial nao tem .clone() neste build -> material novo com a mesma textura
+                if (!spr._charMatCloned) { spr.material = new THREE.MeshBasicMaterial({ map: spr.material.map, transparent: true }); spr._charMatCloned = true; }
                 spr.material.color.setHex(hex);
                 spr.material.depthTest = false; // player sempre na frente
             } catch (e) {}
