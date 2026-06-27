@@ -627,8 +627,11 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         GTA._registerEmitter(car, 'fire', 2.0); // +2s queimando -> fumaca 3s -> carcaca (no _updateEmitters)
         try { if (car.physics) car.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0)); } catch (e) {}
         var g = window._gtaGame;
-        if (g && g.player && g.player.inCar && g.player.currentCar === car && typeof GTA._killPlayer === 'function') {
-            GTA._killPlayer();
+        if (g && g.player && !g.player._dead && typeof GTA._killPlayer === 'function') {
+            var inThis = g.player.inCar && g.player.currentCar === car;
+            var ddx = g.player.position.x - car.sprite.position.x, ddy = g.player.position.y - car.sprite.position.y;
+            var near = (ddx*ddx + ddy*ddy) < 70*70; // raio da explosao
+            if (inThis || near) GTA._killPlayer();
         }
     }
     GTA.detonateCar = detonate;
@@ -726,9 +729,21 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
     };
     function spawnTracer(mx, my, ex, ey) {
         var dx = ex-mx, dy = ey-my, len = Math.sqrt(dx*dx+dy*dy); if (len < 1) return;
-        var tr = quad(len, 3, 0xffee66, 0.9); tr.position.set((mx+ex)/2, (my+ey)/2, 150); tr.rotation.z = Math.atan2(dy, dx);
-        addFx(tr, { max:0.08 });
-        var fl = quad(10, 10, 0xffffaa, 0.95); fl.position.set(mx, my, 150); addFx(fl, { max:0.10, grow:0.6 });
+        var ux = dx/len, uy = dy/len;
+        var gq = GTA._glowQuad;
+        // "pingos" cinzas seguidos na direcao do tiro (estilo GTA1). Pistola = poucos por
+        // tiro; metralhadora = varios tiros/seg -> linha continua de pingos.
+        var step = 18, n = Math.min(8, Math.floor(len/step));
+        for (var i = 0; i <= n; i++) {
+            var d = 6 + i*step + rnd(-2, 2);
+            var puff = gq ? gq(rnd(4, 7), rnd(4, 7), (Math.random() < 0.5 ? 0xc8c8c8 : 0x9a9a9a), 0.6, false)
+                          : quad(rnd(4, 7), rnd(4, 7), 0xc8c8c8, 0.6);
+            puff.position.set(mx + ux*d + rnd(-2, 2), my + uy*d + rnd(-2, 2), 150);
+            addFx(puff, { max: rnd(0.12, 0.26), grow: 0.5 });
+        }
+        // flash curto na boca da arma
+        var fl = gq ? gq(11, 11, 0xfff0b0, 0.9) : quad(11, 11, 0xffffaa, 0.95);
+        fl.position.set(mx, my, 151); addFx(fl, { max: 0.09, grow: 0.7 });
     }
     function spawnBlood(x, y) {
         // Poca redonda escura (textura de brilho radial em cor de sangue, blending normal) -> mancha macia, nao quadrado
@@ -752,8 +767,11 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
     // --- Tiro: hitscan na direcao do player a pe ---
     GTA.fireBullet = function () {
         var g = window._gtaGame; if (!g || !g.player || g.player.inCar) return;
-        var p = g.player; var angle = p.physics ? p.physics.GetAngle() : 0;
-        var ax = -Math.sin(angle), ay = Math.cos(angle);
+        var p = g.player;
+        // Mira na frente VISUAL do sprite (nose = +Y girado por sprite.rotation.z),
+        // senao o tiro saia espelhado/ao contrario da direcao que o player aponta.
+        var rot = p.sprite ? p.sprite.rotation.z : (p.physics ? -p.physics.GetAngle() : 0);
+        var ax = -Math.sin(rot), ay = Math.cos(rot);
         var mx = p.position.x + ax*16, my = p.position.y + ay*16;
         var range = 520, hitT = range, hitPed = null, hitCar = null;
         function test(tx, ty, radius) {
@@ -790,6 +808,7 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         try { if (p.sprite) { p.sprite.visible = true; p.sprite.rotation.z = Math.PI / 2; } } catch (e) {} // corpo deitado
         try { if (p.physics) p.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0)); } catch (e) {}
         spawnBlood(px, py); spawnBlood(px + rnd(-12, 12), py + rnd(-12, 12)); // poca de sangue do lado
+        try { if (g.scene) { g.scene.remove(p); g.scene.add(p); } } catch (e) {} // corpo por cima do sangue
         if (typeof window.GTA_onPlayerMorto === 'function') { try { window.GTA_onPlayerMorto(); } catch (e) {} }
     };
     GTA._revivePlayer = function () {
@@ -830,6 +849,10 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
 
     GTA._updateCombat = function (delta) {
         try { GTA._updateCombatFx(delta); } catch (e) {}
+        try {
+            var _g = window._gtaGame; // se o carro do player virou destroco, ele morre
+            if (_g && _g.player && _g.player.inCar && _g.player.currentCar && _g.player.currentCar._destroyed && !_g.player._dead) GTA._killPlayer();
+        } catch (e) {}
         try { GTA._runOverCheck(); } catch (e) {}
         GTA._pedRespawnT += delta;
         if (GTA._pedRespawnT > 2) { GTA._pedRespawnT = 0; try { if (window._gtaGame) GTA._pedRespawn(window._gtaGame); } catch (e) {} }

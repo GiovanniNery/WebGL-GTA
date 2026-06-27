@@ -112,7 +112,7 @@ GTA.Player.prototype.enterNearestCar = function () {
 
     for (var i = 0; i < cars.length; i++) {
         var c = cars[i];
-        if (!c || !c.sprite) continue;
+        if (!c || !c.sprite || c._destroyed) continue; // nao entra em carcaca/destroco
         var cx = c.sprite.position.x;
         var cy = c.sprite.position.y;
         var dx = cx - px;
