@@ -64,6 +64,7 @@ GTA._placeAICar = function ( car ) {
         car.sprite.position.y = by;
     }
     car.sprite.rotation.z = (dir > 0 ? seg.ang : seg.ang + Math.PI) + Math.PI / 2;
+    car._hx = ux; car._hy = uy; // heading efetivo (sentido de viagem), usado pelo anti-sobreposicao
 };
 
 GTA._aiMk = function ( game, pts, CLEAN, startFrac, key ) {
@@ -189,23 +190,51 @@ GTA.spawnAICars = function ( game ) {
     GTA.Log('AI: trafego (rotas longas) iniciado');
 };
 
+// Anti-sobreposicao: o carro SEGURA se houver outro logo a frente da SUA faixa.
+// snap = fotografia {x,y,hx,hy,destroyed,always} de todos os carros (IA + player) no frame.
+// Mesma direcao -> fila (sempre cede). Perpendicular/parado num cruzamento -> so o de MAIOR
+// indice cede (desempate por ordem total => sem deadlock). Player/destroco -> sempre cede.
+GTA._aiBlockedAhead = function ( car, snap, selfIdx ) {
+    var sx = car.sprite.position.x, sy = car.sprite.position.y, hx = car._hx || 0, hy = car._hy || 0;
+    if (hx === 0 && hy === 0) return false;
+    var AHEAD = 58, LANE = 22;
+    for (var k = 0; k < snap.length; k++) {
+        if (k === selfIdx) continue;
+        var o = snap[k];
+        var dx = o.x - sx, dy = o.y - sy;
+        var fwd = dx * hx + dy * hy; if (fwd <= 0 || fwd > AHEAD) continue;
+        var lat = dx * (-hy) + dy * hx; if (lat < 0) lat = -lat; if (lat > LANE) continue;
+        if (o.always || o.destroyed) return true;          // player / destroco a frente
+        if (o.hx * hx + o.hy * hy > 0.5) return true;      // mesmo sentido -> fila
+        if (selfIdx > k) return true;                      // cruzamento -> maior indice cede
+    }
+    return false;
+};
+
 GTA.updateAICars = function ( delta ) {
     if (delta > 0.05) delta = 0.05; // evita lurch/teleporte: apos o load (~3min) ou tab em background o clock.getDelta() vem gigante
-    GTA.aiCarsPath.forEach(function ( car ) {
-        var p = car._path;
-        if (car._destroyed) { GTA._placeAICar(car); return; } // destroco: para no lugar (o fogo fica nele)
-        p.progress += p.speed * delta * (p.dir || 1);
-        if (p.isRing) {
-            // Anel de intersecao: loop continuo, sem teleporte.
-            if (p.progress >= p.total) p.progress -= p.total;
-            else if (p.progress < 0) p.progress += p.total;
-        } else {
-            // Rua reta: ao chegar na ponta, retorna (vai-e-volta) em vez de teleportar.
-            if (p.progress >= p.total) { p.progress = p.total; p.dir = -1; }
-            else if (p.progress <= 0) { p.progress = 0; p.dir = 1; }
+    var list = GTA.aiCarsPath, n = list.length, i;
+    var snap = new Array(n);
+    for (i = 0; i < n; i++) { var c = list[i]; snap[i] = { x: c.sprite.position.x, y: c.sprite.position.y, hx: c._hx || 0, hy: c._hy || 0, destroyed: !!c._destroyed }; }
+    var pcs = GTA.allCars || []; // carro(s) do player como obstaculo (IA nao atravessa)
+    for (i = 0; i < pcs.length; i++) { var pc = pcs[i]; if (pc && pc.sprite) snap.push({ x: pc.sprite.position.x, y: pc.sprite.position.y, hx: 0, hy: 0, always: true }); }
+    for (i = 0; i < n; i++) {
+        var car = list[i], p = car._path;
+        if (car._destroyed) { GTA._placeAICar(car); continue; } // destroco: para no lugar (o fogo fica nele)
+        if (!GTA._aiBlockedAhead(car, snap, i)) {
+            p.progress += p.speed * delta * (p.dir || 1);
+            if (p.isRing) {
+                // Anel de intersecao: loop continuo, sem teleporte.
+                if (p.progress >= p.total) p.progress -= p.total;
+                else if (p.progress < 0) p.progress += p.total;
+            } else {
+                // Rua reta: ao chegar na ponta, retorna (vai-e-volta) em vez de teleportar.
+                if (p.progress >= p.total) { p.progress = p.total; p.dir = -1; }
+                else if (p.progress <= 0) { p.progress = 0; p.dir = 1; }
+            }
         }
         GTA._placeAICar(car);
-    });
+    }
 };
 
 GTA._aiBoot = function () {
