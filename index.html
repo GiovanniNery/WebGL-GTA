@@ -385,7 +385,6 @@ function mostrarNotificacao(txt) {
 var _flashTimer       = null;
 var _metralhaTimer    = null;
 var _metralhaHold     = false;
-var _pistolaCooldown  = false;   // rate-of-fire pistola
 
 function mostrarFlash() {
     var flash = document.getElementById('_flash');
@@ -425,23 +424,31 @@ function dispararArma() {
     if (window.GTA && GTA.fireBullet) GTA.fireBullet();
 }
 
-function iniciarMetralhadora() {
+// Cadencia por arma (ms entre tiros): pistola ~3 tiros/s, metralhadora 10 tiros/s
+function _cadenciaArma(w) { return w === 2 ? 100 : 320; }
+
+// Fogo continuo enquanto o botao/tecla estiver pressionado, ate acabar a municao.
+// Vale para as DUAS armas (igual ao GTA original: segura e nao para de atirar).
+function iniciarFogo() {
     if (_metralhaHold) return;
+    var p = getPlayer();
+    if (!p || p.inCar || !p.weapon) return;
     _metralhaHold = true;
     function tiro() {
         if (!_metralhaHold) return;
         dispararArma();
-        var p = getPlayer();
-        // Para se ficou sem municao
-        if (!p || p.weapon !== 2) { _metralhaHold = false; return; }
-        _metralhaTimer = setTimeout(tiro, 100); // 10 tiros/s (attackRate=600)
+        var pp = getPlayer();
+        // Para se trocou de arma / ficou sem municao (dispararArma zera weapon)
+        if (!pp || !pp.weapon || pp.inCar) { pararFogo(); return; }
+        _metralhaTimer = setTimeout(tiro, _cadenciaArma(pp.weapon));
     }
     tiro();
 }
 
-function pararMetralhadora() {
+function pararFogo() {
     _metralhaHold = false;
     if (_metralhaTimer) clearTimeout(_metralhaTimer);
+    _metralhaTimer = null;
 }
 
 function acaoBotaoPress() {
@@ -449,24 +456,14 @@ function acaoBotaoPress() {
     if (!p) return;
     if (p.inCar) {
         toggleSirene();
-    } else {
-        if (p.weapon === 2) {
-            iniciarMetralhadora();
-        } else if (p.weapon === 1) {
-            // Pistola: rate of fire 1 tiro/0.4s (attackRate = 150 RPM)
-            if (!_pistolaCooldown) {
-                dispararArma();
-                _pistolaCooldown = true;
-                setTimeout(function(){ _pistolaCooldown = false; }, 400);
-            }
-        } else {
-            // Sem arma: soco (nao faz nada visivel por agora)
-        }
+    } else if (p.weapon) {
+        iniciarFogo(); // pistola e metralhadora: segura = atira sem parar
     }
+    // sem arma (weapon 0): soco (nao faz nada visivel por agora)
 }
 
 function acaoBotaoRelease() {
-    pararMetralhadora();
+    pararFogo();
 }
 
 /* ââ Ciclar arma (como ArmouryPlayer.cs: NextWeapon) âââââââââââ */
@@ -498,17 +495,9 @@ window.GTA_atirarTeclado = function(pressed) {
     var p = getPlayer();
     if (!p || p.inCar) return;
     if (pressed) {
-        if (p.weapon === 2) {
-            iniciarMetralhadora();
-        } else if (p.weapon === 1) {
-            if (!_pistolaCooldown) {
-                dispararArma();
-                _pistolaCooldown = true;
-                setTimeout(function(){ _pistolaCooldown = false; }, 400);
-            }
-        }
+        if (p.weapon) iniciarFogo(); // segura F = atira sem parar (pistola e metralhadora)
     } else {
-        pararMetralhadora();
+        pararFogo();
     }
 };
 
