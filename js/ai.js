@@ -43,10 +43,26 @@ GTA._placeAICar = function ( car ) {
     if (t < 0) t = 0; if (t > 1) t = 1;
     var bx = seg.x0 + seg.dx * t, by = seg.y0 + seg.dy * t;
     var dir = p.dir || 1;
-    // Offset de faixa (mao direita do sentido de viagem) acompanha o sentido,
-    // gerando trafego de mao dupla quando o carro faz o retorno.
-    car.sprite.position.x = bx + seg.uy * GTA._AI_OFF * dir;
-    car.sprite.position.y = by - seg.ux * GTA._AI_OFF * dir;
+    var ux = seg.ux * dir, uy = seg.uy * dir; // heading efetivo (sentido de viagem)
+    // Centraliza o carro no CENTRO da sua faixa (mao direita), nao no centro do tile de cima.
+    // A via tem 2 tiles; acha o par pelo mapa e poe o carro a 32px (meia-largura de tile) do
+    // centro da via, do lado direito do sentido -> mao dupla certinha, entre as faixas amarelas.
+    var g = window._gtaGame, base = g && g.map && g.map.base;
+    if (Math.abs(seg.ux) >= Math.abs(seg.uy)) {
+        // via horizontal: faixas empilhadas em Y; +y = norte, -y = sul
+        var tc = Math.round(bx / 64), tr = -Math.round(by / 64), cenY = by;
+        if (base && GTA._aiTopType(base, tc, tr + 1) === 2) cenY = -(64 * tr + 64);
+        else if (base && GTA._aiTopType(base, tc, tr - 1) === 2) cenY = -(64 * tr);
+        car.sprite.position.x = bx;
+        car.sprite.position.y = (ux > 0) ? cenY - 32 : cenY + 32; // leste->faixa sul, oeste->norte
+    } else {
+        // via vertical: faixas lado a lado em X
+        var tc2 = Math.round(bx / 64), tr2 = -Math.round(by / 64), cenX = bx;
+        if (base && GTA._aiTopType(base, tc2 + 1, tr2) === 2) cenX = 64 * tc2 + 64;
+        else if (base && GTA._aiTopType(base, tc2 - 1, tr2) === 2) cenX = 64 * tc2;
+        car.sprite.position.x = (uy > 0) ? cenX + 32 : cenX - 32; // norte->faixa leste, sul->oeste
+        car.sprite.position.y = by;
+    }
     car.sprite.rotation.z = (dir > 0 ? seg.ang : seg.ang + Math.PI) + Math.PI / 2;
 };
 
@@ -149,7 +165,12 @@ GTA._aiPass = function ( game ) {
                 if (Math.random() < 0.55) { var arr2 = crossOfH(curH), pos2 = -1; for (i = 0; i < arr2.length; i++) if (arr2[i].c === curV.c) { pos2 = i; break; } var hd = (Math.random()<0.5)?1:-1, ni2 = pos2+hd; if (ni2<0||ni2>=arr2.length){hd=-hd;ni2=pos2+hd;} if (ni2>=0&&ni2<arr2.length){ curV = arr2[ni2]; onH = true; dir = hd; pts.push(nodeXY(curV.c, curH.r)); turns++; } }
             }
         }
-        return simplifyRoute(pts);
+        var sp = simplifyRoute(pts);
+        // Apara tocos curtos (<=1 tile) nas pontas: senao o carro "cruza a pista" 1 tile e volta.
+        function seglen(a, b) { return Math.sqrt((b[0]-a[0])*(b[0]-a[0]) + (b[1]-a[1])*(b[1]-a[1])); }
+        if (sp.length >= 3 && seglen(sp[0], sp[1]) < 96) sp = sp.slice(1);
+        if (sp.length >= 3 && seglen(sp[sp.length-2], sp[sp.length-1]) < 96) sp = sp.slice(0, sp.length-1);
+        return sp;
     }
     for (var s = 0; s < 40; s++) {
         if (GTA.aiCarsPath.length >= MAX) break;
