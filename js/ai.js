@@ -771,7 +771,8 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         // Mira na frente VISUAL do sprite (nose = +Y girado por sprite.rotation.z),
         // senao o tiro saia espelhado/ao contrario da direcao que o player aponta.
         var rot = p.sprite ? p.sprite.rotation.z : (p.physics ? -p.physics.GetAngle() : 0);
-        var ax = -Math.sin(rot), ay = Math.cos(rot);
+        // Sprite do ped aponta pra -Y por padrao -> frente = (sin, -cos). Antes saia espelhado.
+        var ax = Math.sin(rot), ay = -Math.cos(rot);
         var mx = p.position.x + ax*16, my = p.position.y + ay*16;
         var range = 520, hitT = range, hitPed = null, hitCar = null;
         function test(tx, ty, radius) {
