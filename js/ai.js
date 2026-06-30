@@ -77,7 +77,8 @@ GTA._aiMk = function ( game, pts, CLEAN, startFrac, key ) {
         car._hl = Math.max(car.width || 40, car.height || 80) * 0.5; // meio-comprimento real p/ seguimento E carRadius
         var segs = [], total = 0;
         for (var i = 0; i < pts.length - 1; i++) { var dx = pts[i+1][0]-pts[i][0], dy = pts[i+1][1]-pts[i][1], len = Math.sqrt(dx*dx+dy*dy); segs.push({ x0:pts[i][0], y0:pts[i][1], dx:dx, dy:dy, len:len, ux:len>0?dx/len:0, uy:len>0?dy/len:0, ang:Math.atan2(dy,dx) }); total += len; }
-        var speed = Math.max(35, Math.min(95, total / 9));
+        // Velocidade autentica do modelo original (maxSpeed ~5..32 nas unidades do GTA1; *3.4 -> px/s).
+        var speed = Math.max(22, Math.min(110, ((mdl && mdl.maxSpeed) ? mdl.maxSpeed : 24) * 3.4));
         var isRing = (pts.length > 2 && pts[0][0] === pts[pts.length-1][0] && pts[0][1] === pts[pts.length-1][1]);
         car._path = { pts:pts, segs:segs, total:total, speed:speed, progress:startFrac*total, dir:1, isRing:isRing, _dmgCooldown:0 };
         car._bk = key;
