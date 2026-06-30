@@ -82,7 +82,8 @@ GTA._aiMk = function ( game, pts, CLEAN, startFrac, key ) {
         var isRing = (pts.length > 2 && pts[0][0] === pts[pts.length-1][0] && pts[0][1] === pts[pts.length-1][1]);
         car._path = { pts:pts, segs:segs, total:total, speed:speed, progress:startFrac*total, dir:1, isRing:isRing, _dmgCooldown:0 };
         car._bk = key;
-        GTA._placeAICar(car); car.sprite.position.z = 128 + (idx%6); game.scene.add(car.sprite); GTA.aiCarsPath.push(car);
+        GTA._placeAICar(car); if (!GTA._aiInitFlow(car, game)) return false; // estado de fluxo a partir do tile do spawn
+        car.sprite.position.z = 128 + (idx%6); game.scene.add(car.sprite); GTA.aiCarsPath.push(car);
         return true;
     } catch (e) { return false; }
 };
@@ -223,33 +224,67 @@ GTA._aiSpeedFactor = function ( car, snap, selfIdx ) {
     return f;
 };
 
+// === FLUXO REAL (block.directions): carros seguem as setas one-way do mapa do GTA1 ===
+// Mapeamento confirmado no jogo: right=+x(leste) left=-x(oeste) up=+y(norte,row-1) down=-y(sul,row+1).
+// Cada tile de rua tem UMA direcao -> o carro anda na seta do tile e VIRA nas ruas cruzadas (mao legal).
+// Mata a contramao por construcao (medida antes: 6/16 carros na contramao).
+GTA._flowAt = function ( base, col, row ) {
+    var c = base[col]; if (!c) return null; var cell = c[row]; if (!cell || !cell.blocks) return null;
+    for (var z = cell.blocks.length - 1; z >= 0; z--) { var b = cell.blocks[z];
+        if (b && b.type === 2) { var d = b.directions || {};
+            if (d.right) return { dx: 1, dy: 0 }; if (d.left) return { dx: -1, dy: 0 };
+            if (d.up) return { dx: 0, dy: 1 }; if (d.down) return { dx: 0, dy: -1 }; return null; } }
+    return null;
+};
+// Inicializa o estado de fluxo do carro a partir do tile do spawn (ja em asfalto pelo valid()).
+GTA._aiInitFlow = function ( car, game ) {
+    var base = game.map.base;
+    var col = Math.round(car.sprite.position.x / 64), row = -Math.round(car.sprite.position.y / 64);
+    var f = GTA._flowAt(base, col, row);
+    if (!f) { var bd = 99, best = null;
+        for (var dc = -2; dc <= 2; dc++) for (var dr = -2; dr <= 2; dr++) { var ff = GTA._flowAt(base, col + dc, row + dr); if (ff) { var dd = dc * dc + dr * dr; if (dd < bd) { bd = dd; best = { c: col + dc, r: row + dr, f: ff }; } } }
+        if (best) { col = best.c; row = best.r; f = best.f; } else return false; }
+    car._col = col; car._row = row; car._fdx = f.dx; car._fdy = f.dy; car._hx = f.dx; car._hy = f.dy;
+    car.sprite.position.x = 64 * col; car.sprite.position.y = -64 * row;
+    car.sprite.rotation.z = Math.atan2(f.dy, f.dx) + Math.PI / 2;
+    return true;
+};
+
 GTA.updateAICars = function ( delta ) {
-    if (delta > 0.05) delta = 0.05; // evita lurch/teleporte: apos o load (~3min) ou tab em background o clock.getDelta() vem gigante
+    if (delta > 0.05) delta = 0.05; // evita lurch apos load (~3min) / tab em background (delta gigante)
+    var g = window._gtaGame, base = g && g.map && g.map.base; if (!base) return;
     var list = GTA.aiCarsPath, n = list.length, i;
+    // snapshot p/ anti-sobreposicao: IA + carro(s) do player + player a pe (para o transito na frente dele)
     var snap = new Array(n);
-    for (i = 0; i < n; i++) { var c = list[i]; snap[i] = { x: c.sprite.position.x, y: c.sprite.position.y, hx: c._hx || 0, hy: c._hy || 0, hl: c._hl || 40, destroyed: !!c._destroyed }; }
-    var pcs = GTA.allCars || []; // carro(s) do player como obstaculo (IA nao atravessa)
-    for (i = 0; i < pcs.length; i++) { var pc = pcs[i]; if (pc && pc.sprite) snap.push({ x: pc.sprite.position.x, y: pc.sprite.position.y, hx: 0, hy: 0, always: true }); }
-    var _pl = (window._gtaGame || {}).player; // player A PE tambem para o transito a sua frente:
-    if (_pl && !_pl.inCar && !_pl._dead && _pl.position) snap.push({ x: _pl.position.x, y: _pl.position.y, hx: 0, hy: 0, always: true }); // assim ele para o carro e rouba sem ser atropelado
-    for (i = 0; i < n; i++) {
-        var car = list[i], p = car._path;
-        if (car._destroyed) { car._curSpeed = 0; GTA._placeAICar(car); continue; } // destroco: para no lugar (o fogo fica nele)
+    for (i = 0; i < n; i++) { var c = list[i]; snap[i] = { x: c.sprite.position.x, y: c.sprite.position.y, hx: c._fdx || 0, hy: c._fdy || 0, hl: c._hl || 40, destroyed: !!c._destroyed }; }
+    var pcs = GTA.allCars || [];
+    for (i = 0; i < pcs.length; i++) { var pc = pcs[i]; if (pc && pc.sprite) snap.push({ x: pc.sprite.position.x, y: pc.sprite.position.y, hx: 0, hy: 0, hl: pc._hl || 40, always: true }); }
+    var _pl = g && g.player; if (_pl && !_pl.inCar && !_pl._dead && _pl.position) snap.push({ x: _pl.position.x, y: _pl.position.y, hx: 0, hy: 0, hl: 20, always: true });
+    for (i = n - 1; i >= 0; i--) {
+        var car = list[i];
+        if (car._destroyed) { car._curSpeed = 0; continue; } // destroco: fica parado no lugar (fogo nele)
+        if (car._fdx == null) continue; // sem estado de fluxo (raro) -> ignora
+        var sp = (car._path && car._path.speed) || 60;
+        car._hx = car._fdx; car._hy = car._fdy;
         var fac = GTA._aiSpeedFactor(car, snap, i);
-        car._curSpeed = p.speed * fac; // velocidade efetiva (desacelerada) usada pelo atropelamento do player
-        if (fac > 0) {
-            p.progress += p.speed * fac * delta * (p.dir || 1);
-            if (p.isRing) {
-                // Anel de intersecao: loop continuo, sem teleporte.
-                if (p.progress >= p.total) p.progress -= p.total;
-                else if (p.progress < 0) p.progress += p.total;
-            } else {
-                // Rua reta: ao chegar na ponta, retorna (vai-e-volta) em vez de teleportar.
-                if (p.progress >= p.total) { p.progress = p.total; p.dir = -1; }
-                else if (p.progress <= 0) { p.progress = 0; p.dir = 1; }
+        car._curSpeed = sp * fac; // velocidade efetiva (usada pelo atropelamento)
+        var stepd = sp * fac * delta;
+        car.sprite.position.x += car._fdx * stepd; car.sprite.position.y += car._fdy * stepd;
+        // mantem centrado na faixa (eixo perpendicular ao movimento)
+        if (car._fdx !== 0) car.sprite.position.y = -64 * car._row; else car.sprite.position.x = 64 * car._col;
+        var nc = Math.round(car.sprite.position.x / 64), nr = -Math.round(car.sprite.position.y / 64);
+        if (nc !== car._col || nr !== car._row) { // entrou em tile novo: decide o sentido
+            var f = GTA._flowAt(base, nc, nr);
+            if (!f) { try { g.scene.remove(car.sprite); } catch (e) {} if (car._bk && GTA._aiUsedBuckets) delete GTA._aiUsedBuckets[car._bk]; list.splice(i, 1); continue; } // saiu da malha -> recicla
+            car._col = nc; car._row = nr; var hx = f.dx, hy = f.dy; // default: segue a seta do tile
+            if (Math.random() < 0.35) { // as vezes vira numa rua cruzada, se a mao for legal
+                var legal = [], P = [{ dx: -f.dy, dy: f.dx }, { dx: f.dy, dy: -f.dx }];
+                for (var q = 0; q < 2; q++) { var pp = P[q], pf = GTA._flowAt(base, nc + pp.dx, nr - pp.dy); if (pf && pf.dx === pp.dx && pf.dy === pp.dy) legal.push(pp); }
+                if (legal.length) { var pk = legal[(Math.random() * legal.length) | 0]; hx = pk.dx; hy = pk.dy; }
             }
+            car._fdx = hx; car._fdy = hy; car.sprite.rotation.z = Math.atan2(hy, hx) + Math.PI / 2;
+            car.sprite.position.x = 64 * nc; car.sprite.position.y = -64 * nr;
         }
-        GTA._placeAICar(car);
     }
 };
 
