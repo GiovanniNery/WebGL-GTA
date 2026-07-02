@@ -67,6 +67,28 @@ GTA._placeAICar = function ( car ) {
     car._hx = ux; car._hy = uy; // heading efetivo (sentido de viagem), usado pelo anti-sobreposicao
 };
 
+// Cor de fabrica ORIGINAL: cada modelo tem 12 remaps HLS no .G24 (car.remap[i] = {h,l,s}).
+// Aproximamos o palette-shift com um tint HSL->RGB. Clamps de seguranca: nunca escurece
+// demais (l>=0.55) nem satura demais (s<=0.6); remap zerado (0,0,0) = cor de fabrica base -> sem tint.
+GTA._factoryPaint = function ( car, mdl ) {
+    try {
+        if (!mdl || !mdl.remap || !mdl.remap.length) return;
+        var rm = mdl.remap[(Math.random() * mdl.remap.length) | 0];
+        if (!rm || (!rm.h && !rm.l && !rm.s)) return; // base: mantem textura pura
+        var h = (((rm.h % 256) + 256) % 256) / 255;
+        var s = Math.min(0.6, Math.abs(rm.s) / 255);
+        var l = Math.min(0.92, Math.max(0.55, 0.55 + Math.abs(rm.l) / 255 * 0.37));
+        // HSL -> RGB (proprio, r49 nao tem setHSL)
+        function hue(p, q, t) { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1/6) return p + (q - p) * 6 * t; if (t < 1/2) return q; if (t < 2/3) return p + (q - p) * (2/3 - t) * 6; return p; }
+        var q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+        var r = hue(p, q, h + 1/3), gg = hue(p, q, h), b = hue(p, q, h - 1/3);
+        var hex = ((r * 255) << 16) | ((gg * 255) << 8) | (b * 255 | 0);
+        var sp = car.sprite; if (!sp || !sp.material) return;
+        if (!sp._dmgMatCloned) { sp.material = new THREE.MeshBasicMaterial({ map: sp.material.map, transparent: true }); sp._dmgMatCloned = true; }
+        sp.material.color.setHex(hex);
+    } catch (e) {}
+};
+
 GTA._aiMk = function ( game, pts, CLEAN, startFrac, key ) {
     var idx = GTA.aiCarsPath.length;
     try {
@@ -74,6 +96,7 @@ GTA._aiMk = function ( game, pts, CLEAN, startFrac, key ) {
         car.addCar(game, GTA._aiClean[idx % GTA._aiClean.length], 0, 0, 0, 0);
         var mdl = game.cars[car.type]; // addCar nao copia dims -> puxa do modelo (px de mundo)
         if (mdl) { if (mdl.width) car.width = mdl.width; if (mdl.height) car.height = mdl.height; }
+        GTA._factoryPaint(car, mdl); // cor de fabrica ORIGINAL (remap HLS do .G24)
         car._hl = Math.max(car.width || 40, car.height || 80) * 0.5; // meio-comprimento real p/ seguimento E carRadius
         var segs = [], total = 0;
         for (var i = 0; i < pts.length - 1; i++) { var dx = pts[i+1][0]-pts[i][0], dy = pts[i+1][1]-pts[i][1], len = Math.sqrt(dx*dx+dy*dy); segs.push({ x0:pts[i][0], y0:pts[i][1], dx:dx, dy:dy, len:len, ux:len>0?dx/len:0, uy:len>0?dy/len:0, ang:Math.atan2(dy,dx) }); total += len; }
@@ -236,6 +259,12 @@ GTA._flowAt = function ( base, col, row ) {
             if (d.up) return { dx: 0, dy: 1 }; if (d.down) return { dx: 0, dy: -1 }; return null; } }
     return null;
 };
+// Le trafficLights (dado ORIGINAL do mapa, 3 bits por tile de rua) do bloco de rua do topo.
+GTA._lightsAt = function ( base, col, row ) {
+    var c = base[col]; if (!c) return 0; var cell = c[row]; if (!cell || !cell.blocks) return 0;
+    for (var z = cell.blocks.length - 1; z >= 0; z--) { var b = cell.blocks[z]; if (b && b.type === 2) return b.trafficLights || 0; }
+    return 0;
+};
 // Inicializa o estado de fluxo do carro a partir do tile do spawn (ja em asfalto pelo valid()).
 GTA._aiInitFlow = function ( car, game ) {
     var base = game.map.base;
@@ -270,6 +299,22 @@ GTA.updateAICars = function ( delta ) {
         // Anti-sobreposicao so p/ carros perto da camera (visiveis): corta o O(n^2) que pesava o FPS.
         var ddx = car.sprite.position.x - camx, ddy = car.sprite.position.y - camy;
         var fac = (ddx * ddx + ddy * ddy > CULL) ? 1 : GTA._aiSpeedFactor(car, snap, i);
+        // SEMAFORO original (block.trafficLights): se o tile a frente tem sinal e a fase esta
+        // vermelha p/ o meu eixo (H/V alternam a cada 3.5s), freia ao chegar na borda do tile.
+        if (fac > 0) {
+            var tlc = car._col + car._fdx, tlr = car._row - car._fdy;
+            if (GTA._lightsAt(base, tlc, tlr)) {
+                var phase = ((((window.performance && performance.now) ? performance.now() : Date.now()) / 3500) | 0) % 2;
+                var green = (car._fdx !== 0) ? (phase === 0) : (phase === 1);
+                if (!green) {
+                    var distEdge = (car._fdx !== 0)
+                        ? 32 - (car.sprite.position.x - 64 * car._col) * car._fdx
+                        : 32 - (car.sprite.position.y - (-64 * car._row)) * car._fdy;
+                    if (distEdge < 26) fac = 0;           // parado na faixa
+                    else if (distEdge < 44) fac = Math.min(fac, 0.35); // desacelerando
+                }
+            }
+        }
         car._curSpeed = sp * fac; // velocidade efetiva (usada pelo atropelamento)
         var stepd = sp * fac * delta;
         car.sprite.position.x += car._fdx * stepd; car.sprite.position.y += car._fdy * stepd;
@@ -753,11 +798,11 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         }
     }
     GTA.detonateCar = detonate;
-    GTA._applyDamage = function (car, game) {
+    GTA._applyDamage = function (car, game, step) {
         if (!car || !car.sprite || car._destroyed) return;
         var now = (window.performance && performance.now) ? performance.now() : Date.now();
         if (car._dmgCd && now - car._dmgCd < 700) return;
-        car._dmgCd = now; car._dmg = (car._dmg || 0) + 1;
+        car._dmgCd = now; car._dmg = (car._dmg || 0) + (step || 1);
         var d = car._dmg;
         // amassa + escurece progressivamente (rampa)
         GTA._addDents(car, d <= 2 ? 1 : 2);
@@ -782,16 +827,24 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
             pc._starCd = nowS;
             GTA._impactStar((pcx + ox) / 2, (pcy + oy) / 2, pc.sprite.position.z);
         }
+        // Dano por MASSA (dados originais): quem e' mais pesado amassa mais o outro.
+        // weight vem do game.cars[type].weight (STYLE001.G24); razao >=1.8 -> hit em dobro no mais leve.
+        function wOf(c) { try { var m = g.cars[c.type]; return (m && m.weight) || 1000; } catch (e) { return 1000; } }
+        function hitBoth(other) {
+            var wp = wOf(pc), wo = wOf(other);
+            GTA._applyDamage(other, g, (wp / wo >= 1.8) ? 2 : 1);
+            GTA._applyDamage(pc, g, (wo / wp >= 1.8) ? 2 : 1);
+        }
         for (var i = GTA.aiCarsPath.length - 1; i >= 0; i--) {
             var car = GTA.aiCarsPath[i]; if (!car || !car.sprite) continue;
             var dx = car.sprite.position.x - pcx, dy = car.sprite.position.y - pcy;
-            if (dx*dx + dy*dy < 4900) { star(car.sprite.position.x, car.sprite.position.y); GTA._aiToPhysics(car, g); GTA.aiCarsPath.splice(i, 1); GTA._applyDamage(car, g); GTA._applyDamage(pc, g); }
+            if (dx*dx + dy*dy < 4900) { star(car.sprite.position.x, car.sprite.position.y); GTA._aiToPhysics(car, g); GTA.aiCarsPath.splice(i, 1); hitBoth(car); }
         }
         var all = GTA.allCars || [];
         for (var a = 0; a < all.length; a++) {
             var ac = all[a]; if (ac === pc || !ac || !ac.sprite) continue;
             var ex = ac.sprite.position.x - pcx, ey = ac.sprite.position.y - pcy;
-            if (ex*ex + ey*ey < 4900) { star(ac.sprite.position.x, ac.sprite.position.y); GTA._applyDamage(ac, g); GTA._applyDamage(pc, g); }
+            if (ex*ex + ey*ey < 4900) { star(ac.sprite.position.x, ac.sprite.position.y); hitBoth(ac); }
         }
     };
     var _orig = GTA.updateAICars;
@@ -825,6 +878,13 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
     }
     function rnd(a, b) { return a + Math.random()*(b-a); }
     function carRadius(car) { var w = car.width||40, h = car.height||80; return Math.max(w,h)*0.5; }
+    // Raio de colisao do PED direto do sprite ORIGINAL (metade da largura), cacheado. Fallback 10.
+    GTA._pedRadius = function (g) {
+        if (GTA._pedRcache) return GTA._pedRcache;
+        var r = 10;
+        try { var sp = g.sprites[g.spriteNumbers.offset.PED]; if (sp && sp.width) r = Math.max(6, sp.width * 0.5); } catch (e) {}
+        GTA._pedRcache = r; return r;
+    };
 
     // --- Particulas de combate (tracer, sangue) ---
     GTA._combatFx = GTA._combatFx || [];
@@ -900,7 +960,8 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
             var px = rx-ax*t, py = ry-ay*t; var R = radius+8; if (px*px+py*py > R*R) return -1; return t;
         }
         var peds = GTA.aiPedestrians || [];
-        for (var i = 0; i < peds.length; i++) { var pd = peds[i]; if (!pd || pd._dead) continue; var t = test(pd.position.x, pd.position.y, 12); if (t >= 0 && t < hitT) { hitT = t; hitPed = pd; hitCar = null; } }
+        var pedR = GTA._pedRadius(g); // raio REAL do sprite original (nao 12 fixo)
+        for (var i = 0; i < peds.length; i++) { var pd = peds[i]; if (!pd || pd._dead) continue; var t = test(pd.position.x, pd.position.y, pedR); if (t >= 0 && t < hitT) { hitT = t; hitPed = pd; hitCar = null; } }
         var cars = (GTA.aiCarsPath || []).concat(GTA.allCars || []);
         for (var j = 0; j < cars.length; j++) { var c = cars[j]; if (!c || !c.sprite || c === p.currentCar) continue; var t2 = test(c.sprite.position.x, c.sprite.position.y, carRadius(c)); if (t2 >= 0 && t2 < hitT) { hitT = t2; hitCar = c; hitPed = null; } }
         spawnTracer(mx, my, mx + ax*hitT, my + ay*hitT);
@@ -945,7 +1006,7 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         var car = p.currentCar, spd = 0;
         try { var v = car.physics.GetLinearVelocity(); spd = Math.sqrt(v.x*v.x + v.y*v.y); } catch (e) {}
         if (spd < 1.5) return;
-        var cx = car.sprite.position.x, cy = car.sprite.position.y, R = carRadius(car)+10;
+        var cx = car.sprite.position.x, cy = car.sprite.position.y, R = carRadius(car) + GTA._pedRadius(g);
         var peds = GTA.aiPedestrians || [];
         for (var i = peds.length-1; i >= 0; i--) { var pd = peds[i]; if (!pd || pd._dead) continue; var dx = pd.position.x-cx, dy = pd.position.y-cy; if (dx*dx+dy*dy < R*R) GTA._killPed(pd, 'run'); }
     };
