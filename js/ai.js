@@ -102,7 +102,7 @@ GTA.disableAICar = function ( car ) {
 };
 
 GTA._aiPass = function ( game ) {
-    var WIN = 24, REG = 7, MAX = 70, CARS_PER = 2, RECYCLE = 4500, OFFSCR = 700, EXT = 40;
+    var WIN = 24, REG = 7, MAX = 50, CARS_PER = 2, RECYCLE = 4500, OFFSCR = 700, EXT = 40;
     var base = game.map.base, used = GTA._aiUsedBuckets;
     var cam = game.camera.position, cx = cam.x, cy = cam.y;
     for (var i = GTA.aiCarsPath.length - 1; i >= 0; i--) { var c = GTA.aiCarsPath[i]; var dx = c.sprite.position.x - cx, dy = c.sprite.position.y - cy; if (Math.sqrt(dx*dx+dy*dy) > RECYCLE) { try { game.scene.remove(c.sprite); } catch (e) {} if (c._bk) delete used[c._bk]; GTA.aiCarsPath.splice(i, 1); } }
@@ -253,6 +253,7 @@ GTA._aiInitFlow = function ( car, game ) {
 GTA.updateAICars = function ( delta ) {
     if (delta > 0.05) delta = 0.05; // evita lurch apos load (~3min) / tab em background (delta gigante)
     var g = window._gtaGame, base = g && g.map && g.map.base; if (!base) return;
+    var cam = g.camera && g.camera.position, camx = cam ? cam.x : 0, camy = cam ? cam.y : 0, CULL = 720 * 720; // alem disso o carro nao e' visivel
     var list = GTA.aiCarsPath, n = list.length, i;
     // snapshot p/ anti-sobreposicao: IA + carro(s) do player + player a pe (para o transito na frente dele)
     var snap = new Array(n);
@@ -266,7 +267,9 @@ GTA.updateAICars = function ( delta ) {
         if (car._fdx == null) continue; // sem estado de fluxo (raro) -> ignora
         var sp = (car._path && car._path.speed) || 60;
         car._hx = car._fdx; car._hy = car._fdy;
-        var fac = GTA._aiSpeedFactor(car, snap, i);
+        // Anti-sobreposicao so p/ carros perto da camera (visiveis): corta o O(n^2) que pesava o FPS.
+        var ddx = car.sprite.position.x - camx, ddy = car.sprite.position.y - camy;
+        var fac = (ddx * ddx + ddy * ddy > CULL) ? 1 : GTA._aiSpeedFactor(car, snap, i);
         car._curSpeed = sp * fac; // velocidade efetiva (usada pelo atropelamento)
         var stepd = sp * fac * delta;
         car.sprite.position.x += car._fdx * stepd; car.sprite.position.y += car._fdy * stepd;
