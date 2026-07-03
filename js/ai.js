@@ -1101,3 +1101,91 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
     var _prev = GTA.updateAICars;
     GTA.updateAICars = function (delta) { if (typeof _prev === 'function') _prev(delta); try { GTA._updateCombat(delta); } catch (e) {} };
 })();
+
+// === FASE SOM: SFX ORIGINAIS do GTA1 (data/AUDIO/LEVEL001.SDT + .RAW) ===
+// SDT = tabela de 12 bytes/som (offset, tamanho, sampleRate); RAW = PCM 8-bit unsigned mono.
+// Web Audio: decodifica na mao p/ AudioBuffer. Mapa de indices calibravel: GTA._sfxMap.
+// Debug no console: GTA.testSound(i) toca o som i (0..130) p/ calibrar os indices.
+(function () {
+    if (GTA._sfxOn) return; GTA._sfxOn = true;
+    var ctx = null, raw = null, table = null, cache = {}, master = null;
+    var pending = false;
+
+    GTA._sfxMap = { shot: 19, mg: 20, explo: 2, crash: 3, engine: 30 }; // chutes calibraveis
+
+    function ensureCtx() {
+        if (ctx) return ctx;
+        var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+        ctx = new AC();
+        master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
+        return ctx;
+    }
+    // iOS/Chrome exigem gesto do usuario p/ liberar o audio
+    function unlock() { try { var c = ensureCtx(); if (c && c.state === 'suspended') c.resume(); } catch (e) {} }
+    ['keydown', 'touchstart', 'mousedown'].forEach(function (ev) { window.addEventListener(ev, unlock, { passive: true }); });
+
+    function loadData() {
+        if (pending || (raw && table)) return; pending = true;
+        var done = 0;
+        function fin() { done++; if (done === 2) { pending = false; GTA.Log('SFX: ' + (table ? table.length : 0) + ' sons originais carregados'); } }
+        try {
+            var x1 = new XMLHttpRequest(); x1.open('GET', 'data/AUDIO/LEVEL001.SDT', true); x1.responseType = 'arraybuffer';
+            x1.onload = function () { var dv = new DataView(x1.response); var n = (x1.response.byteLength / 12) | 0; table = [];
+                for (var i = 0; i < n; i++) table.push({ off: dv.getUint32(i * 12, true), len: dv.getUint32(i * 12 + 4, true), sr: dv.getUint32(i * 12 + 8, true) });
+                fin(); };
+            x1.onerror = function () { pending = false; }; x1.send();
+            var x2 = new XMLHttpRequest(); x2.open('GET', 'data/AUDIO/LEVEL001.RAW', true); x2.responseType = 'arraybuffer';
+            x2.onload = function () { raw = new Uint8Array(x2.response); fin(); };
+            x2.onerror = function () { pending = false; }; x2.send();
+        } catch (e) { pending = false; }
+    }
+    setTimeout(loadData, 3000); // carrega em paralelo com o mapa
+
+    function getBuf(i) {
+        if (cache[i]) return cache[i];
+        if (!raw || !table || !table[i] || !ensureCtx()) return null;
+        var e = table[i]; if (!e.len || !e.sr || e.len < 100) return null;
+        var buf = ctx.createBuffer(1, e.len, Math.max(3000, Math.min(48000, e.sr)));
+        var ch = buf.getChannelData(0);
+        for (var j = 0; j < e.len; j++) ch[j] = (raw[e.off + j] - 128) / 128; // 8-bit unsigned -> float
+        cache[i] = buf; return buf;
+    }
+    GTA.playSoundIdx = function (i, opts) {
+        opts = opts || {};
+        try {
+            var c = ensureCtx(); if (!c || c.state === 'suspended') return null;
+            var b = getBuf(i); if (!b) { loadData(); return null; }
+            var src = c.createBufferSource(); src.buffer = b;
+            src.loop = !!opts.loop;
+            src.playbackRate.value = opts.rate || 1;
+            var g = c.createGain(); g.gain.value = (opts.vol != null ? opts.vol : 1);
+            src.connect(g); g.connect(master); src.start(0);
+            src._gain = g;
+            return src;
+        } catch (e) { return null; }
+    };
+    GTA.playSfx = function (name, opts) { var i = GTA._sfxMap[name]; if (i == null) return null; return GTA.playSoundIdx(i, opts); };
+    GTA.testSound = function (i) { unlock(); return GTA.playSoundIdx(i, { vol: 1 }); };
+
+    // --- Hooks: tiro, explosao, batida (wrappers; nao mexem nas funcoes) ---
+    var _fb = GTA.fireBullet;
+    if (typeof _fb === 'function') GTA.fireBullet = function () { try { GTA.playSfx('shot', { vol: 0.8 }); } catch (e) {} return _fb.apply(this, arguments); };
+    var _det = GTA.detonateCar;
+    if (typeof _det === 'function') GTA.detonateCar = function () { try { GTA.playSfx('explo', { vol: 1 }); } catch (e) {} return _det.apply(this, arguments); };
+    var _ad = GTA._applyDamage;
+    if (typeof _ad === 'function') GTA._applyDamage = function (car) { try { if (car && !car._destroyed) GTA.playSfx('crash', { vol: 0.6 }); } catch (e) {} return _ad.apply(this, arguments); };
+
+    // --- Motor do player: loop com pitch pela velocidade ---
+    var engineSrc = null;
+    GTA._engineTick = function () {
+        var g = window._gtaGame; if (!g || !g.player) return;
+        var p = g.player;
+        if (p.inCar && p.currentCar && p.currentCar.physics && ctx && ctx.state === 'running') {
+            var v = p.currentCar.physics.GetLinearVelocity(); var spd = Math.sqrt(v.x * v.x + v.y * v.y);
+            if (!engineSrc) { engineSrc = GTA.playSfx('engine', { loop: true, vol: 0.35, rate: 0.8 }); }
+            if (engineSrc) { try { engineSrc.playbackRate.value = Math.min(2.2, 0.75 + spd * 0.055); } catch (e) {} }
+        } else if (engineSrc) { try { engineSrc.stop(0); } catch (e) {} engineSrc = null; }
+    };
+    var _up = GTA.updateAICars;
+    GTA.updateAICars = function (delta) { if (typeof _up === 'function') _up(delta); try { GTA._engineTick(); } catch (e) {} };
+})();
