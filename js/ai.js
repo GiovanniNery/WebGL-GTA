@@ -1026,6 +1026,47 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
         }
     };
 
+    // --- Objetos ESMAGAVEIS (dado original: gameobjects com status==2 no .G24) ---
+    // O mapa ja posiciona os objetos (map.gameobjects); aqui filtramos os esmagaveis uma vez
+    // e o carro do player em movimento os destroi (remove sprite + estrela de impacto).
+    GTA._smashables = null;
+    GTA._smashInit = function (g) {
+        var list = [];
+        try {
+            var objs = (g.map && g.map.gameobjects) || [];
+            for (var i = 0; i < objs.length; i++) {
+                var go = objs[i]; if (!go || !go.sprite || go.remap >= 128) continue; // >=128 = veiculo
+                var def = g.gameobjects && g.gameobjects[go.type];
+                if (!def || def.status !== 2) continue;
+                var r = Math.max(8, Math.max(def.width || 0, def.height || 0) * 0.5);
+                list.push({ sprite: go.sprite, x: go.sprite.position.x, y: go.sprite.position.y, r: r, done: false });
+            }
+        } catch (e) {}
+        GTA._smashables = list;
+        GTA.Log('Smash: ' + list.length + ' objetos esmagaveis no mapa');
+    };
+    GTA._smashCheck = function () {
+        var g = window._gtaGame; if (!g || !g.player) return;
+        if (GTA._smashables === null && g.map && g.map.gameobjects && g.map.gameobjects.length) GTA._smashInit(g);
+        var s = GTA._smashables; if (!s || !s.length) return;
+        var p = g.player; if (!p.inCar || !p.currentCar || !p.currentCar.sprite) return;
+        var car = p.currentCar, spd = 0;
+        try { var v = car.physics.GetLinearVelocity(); spd = Math.sqrt(v.x*v.x + v.y*v.y); } catch (e) {}
+        if (spd < 1.2) return; // parado nao esmaga
+        var cx = car.sprite.position.x, cy = car.sprite.position.y, CR = carRadius(car);
+        for (var i = 0; i < s.length; i++) {
+            var o = s[i]; if (o.done) continue;
+            var dx = o.x - cx; if (dx > 200 || dx < -200) continue;
+            var dy = o.y - cy; if (dy > 200 || dy < -200) continue;
+            var R = o.r + CR;
+            if (dx*dx + dy*dy < R*R) {
+                o.done = true;
+                try { if (o.sprite.parent) o.sprite.parent.remove(o.sprite); else o.sprite.visible = false; } catch (e) { try { o.sprite.visible = false; } catch (e2) {} }
+                try { GTA._impactStar(o.x, o.y, car.sprite.position.z); } catch (e) {}
+            }
+        }
+    };
+
     // --- Respawn de peds nas calcadas (type 3) perto do player ---
     GTA._pedRespawnT = 0;
     GTA._pedRespawn = function (game) {
@@ -1051,6 +1092,7 @@ GTA.AIPedestrian.prototype.updateAI = function ( delta ) {
             if (_g && _g.player && _g.player.inCar && _g.player.currentCar && _g.player.currentCar._destroyed && !_g.player._dead) GTA._killPlayer();
         } catch (e) {}
         try { GTA._runOverCheck(); } catch (e) {}
+        try { GTA._smashCheck(); } catch (e) {}
         try { GTA._aiRunOverPlayer(); } catch (e) {}
         GTA._pedRespawnT += delta;
         if (GTA._pedRespawnT > 2) { GTA._pedRespawnT = 0; try { if (window._gtaGame) GTA._pedRespawn(window._gtaGame); } catch (e) {} }

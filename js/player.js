@@ -146,8 +146,20 @@ GTA.Player.prototype.exitCar = function () {
 
     if (this.currentCar.physics) {
         this.currentCar.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0));
-        var carPos = this.currentCar.physics.GetPosition();
-        this.physics.SetPosition(new Box2D.Common.Math.b2Vec2(carPos.x + 2, carPos.y + 2));
+        // Sai pela PORTA real do modelo (doors[0].rpx do .G24): offset lateral no lado da porta,
+        // perpendicular ao heading do carro. Fallback: lado esquerdo a 22px.
+        var doorOff = 22, doorSide = -1;
+        try {
+            var mdl = window._gtaGame.cars[this.currentCar.type];
+            if (mdl && mdl.doors && mdl.doors.length) {
+                var dr = mdl.doors[0];
+                if (dr && typeof dr.rpx === 'number' && dr.rpx !== 0) { doorSide = dr.rpx < 0 ? -1 : 1; doorOff = Math.max(18, Math.abs(dr.rpx) + 10); }
+            }
+        } catch (e) {}
+        var sp = this.currentCar.sprite, heading = sp ? (sp.rotation.z - Math.PI / 2) : 0;
+        var lx = -Math.sin(heading) * doorOff * doorSide, ly = Math.cos(heading) * doorOff * doorSide;
+        var wx = (sp ? sp.position.x : 0) + lx, wy = (sp ? sp.position.y : 0) + ly;
+        this.physics.SetPosition(new Box2D.Common.Math.b2Vec2((wx + 32) / (GTA.PhysicsScale || 10), (32 - wy) / (GTA.PhysicsScale || 10)));
     }
 
     this.inCar = false;
