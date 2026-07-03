@@ -93,19 +93,31 @@
 
 <!-- âââ MENU DE INICIO ââââââââââââââââââââââââââââââââââââââââââ -->
 <div id="_menu" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:100000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px;">
-    <div style="color:#cc0000;font-family:'Courier New',monospace;font-size:72px;font-weight:900;letter-spacing:8px;text-shadow:3px 3px 0 #440000,0 0 60px #ff0000;">ATG1</div>
-    <div style="color:#555;font-family:'Courier New',monospace;font-size:10px;text-align:center;line-height:2.4;letter-spacing:2px;">
-        JOYSTICK ESQUERDO &mdash; MOVER / GIRAR<br>
-        ENTRAR CARRO &mdash; ENTRAR / SAIR DO VEICULO<br>
-        ACAO &mdash; ATIRAR / SIRENE NO CARRO<br>
-        DERRAPAR &mdash; FREAR E DERRAPAR (ESPACO NO TECLADO)
+    <!-- TELA DE TITULO (fluxo do original: titulo -> press any key -> menu) -->
+    <div id="_titleScr" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+        <div style="color:#e8e0c8;font-family:Arial Black,Courier New,monospace;font-size:52px;font-weight:900;letter-spacing:2px;text-transform:lowercase;line-height:0.95;text-align:center;text-shadow:4px 4px 0 #7a1010,0 0 40px #300;">grand theft auto</div>
+        <div style="color:#888;font-family:Courier New,monospace;font-size:12px;letter-spacing:6px;margin-top:4px;">ATG1 &middot; LIBERTY CITY</div>
+        <div id="_pressKey" style="color:#ffd23f;font-family:Courier New,monospace;font-size:14px;letter-spacing:4px;margin-top:46px;animation:pk 1.1s steps(2) infinite;">PRESSIONE QUALQUER TECLA</div>
+        <style>@keyframes pk{50%{opacity:0}}</style>
     </div>
-    <button id="_playBtn" style="margin-top:12px;padding:16px 56px;background:#cc0000;color:#fff;border:2px solid #ff4444;border-radius:0;font-size:15px;font-family:'Courier New',monospace;font-weight:bold;cursor:pointer;letter-spacing:4px;">JOGAR</button>
+    <!-- MENU PRINCIPAL (aparece depois do title) -->
+    <div id="_menuScr" style="display:none;flex-direction:column;align-items:center;gap:24px;">
+        <div style="color:#cc0000;font-family:Courier New,monospace;font-size:40px;font-weight:900;letter-spacing:8px;text-shadow:3px 3px 0 #440000,0 0 60px #ff0000;">ATG1</div>
+        <div style="color:#555;font-family:Courier New,monospace;font-size:10px;text-align:center;line-height:2.4;letter-spacing:2px;">
+            JOYSTICK ESQUERDO &mdash; MOVER / GIRAR<br>
+            ENTRAR CARRO &mdash; ENTRAR / SAIR DO VEICULO (PERTO DA PORTA!)<br>
+            ACAO &mdash; ATIRAR / SIRENE NO CARRO<br>
+            DERRAPAR &mdash; FREAR E DERRAPAR (ESPACO NO TECLADO)
+        </div>
+        <button id="_playBtn" style="margin-top:12px;padding:16px 56px;background:#cc0000;color:#fff;border:2px solid #ff4444;border-radius:0;font-size:15px;font-family:Courier New,monospace;font-weight:bold;cursor:pointer;letter-spacing:4px;">JOGAR</button>
+    </div>
 </div>
 
 <!-- --- SELECAO DE PERSONAGEM (sobreposta ao load p/ mascarar a espera) --- -->
 <div id="_charSelect" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0b0b0b;z-index:99998;flex-direction:column;align-items:center;justify-content:center;gap:22px;font-family:'Courier New',monospace;">
-    <div style="color:#cc0000;font-size:32px;font-weight:900;letter-spacing:5px;text-shadow:2px 2px 0 #440000;">ESCOLHA SEU PERSONAGEM</div>
+    <div style="color:#ffd23f;font-size:15px;letter-spacing:8px;">LIBERTY CITY</div>
+    <div style="color:#cc0000;font-size:30px;font-weight:900;letter-spacing:5px;text-shadow:2px 2px 0 #440000;">ESCOLHA SEU JOGADOR</div>
+    <input id="_plName" maxlength="12" placeholder="SEU NOME" style="background:#111;border:1px solid #333;color:#e8e0c8;font-family:monospace;font-size:14px;letter-spacing:3px;padding:8px 14px;text-align:center;text-transform:uppercase;width:190px;outline:none;">
     <div id="_csCards" style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center;max-width:90%;"></div>
     <div style="width:240px;height:6px;background:#222;border-radius:3px;overflow:hidden;margin-top:6px;">
         <div id="_csBar" style="height:100%;width:0%;background:#e55;border-radius:3px;transition:width .2s;"></div>
@@ -699,6 +711,33 @@ function comecarJogo() {
     atualizarHUD();
     try { criarPickups(window._gtaGame); loopPickups(); } catch (e) {}
 }
+
+// --- TELA DE TITULO: qualquer tecla/toque avanca pro menu (fluxo do original) ---
+(function () {
+    var done = false;
+    function advanceTitle(e) {
+        if (done) return; done = true;
+        var t = document.getElementById('_titleScr'), m = document.getElementById('_menuScr');
+        if (t) t.style.display = 'none';
+        if (m) m.style.display = 'flex';
+        window.removeEventListener('keydown', advanceTitle);
+        window.removeEventListener('touchstart', advanceTitle);
+        window.removeEventListener('mousedown', advanceTitle);
+        if (e && e.type !== 'keydown') { e.preventDefault(); e.stopPropagation(); }
+    }
+    window.addEventListener('keydown', advanceTitle);
+    window.addEventListener('touchstart', advanceTitle, { passive: false });
+    window.addEventListener('mousedown', advanceTitle);
+})();
+
+// --- Nome do jogador (tela LIBERTY CITY) ---
+window.GTA_playerName = 'PLAYER';
+(function () {
+    var inp = document.getElementById('_plName');
+    if (!inp) return;
+    inp.addEventListener('change', function () { window.GTA_playerName = (inp.value || 'PLAYER').toUpperCase().slice(0, 12); });
+    inp.addEventListener('input', function () { window.GTA_playerName = (inp.value || 'PLAYER').toUpperCase().slice(0, 12); });
+})();
 
 document.getElementById('_playBtn').addEventListener('touchstart', function(e){ e.preventDefault(); iniciarJogo(); }, {passive:false});
 document.getElementById('_playBtn').addEventListener('click', iniciarJogo);
