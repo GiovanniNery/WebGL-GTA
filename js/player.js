@@ -101,43 +101,69 @@ GTA.Player.prototype.toggleCar = function () {
     }
 };
 
+// Ponto da PORTA do motorista no mundo (doors[0].rpx do .G24: lado + offset reais do modelo).
+GTA.Player.prototype._doorPoint = function ( c ) {
+    var doorOff = 22, doorSide = -1;
+    try {
+        var mdl = window._gtaGame.cars[c.type];
+        if (mdl && mdl.doors && mdl.doors.length) {
+            var dr = mdl.doors[0];
+            if (dr && typeof dr.rpx === 'number' && dr.rpx !== 0) { doorSide = dr.rpx < 0 ? -1 : 1; doorOff = Math.max(16, Math.abs(dr.rpx) + 6); }
+        }
+    } catch (e) {}
+    var sp = c.sprite, h = sp ? (sp.rotation.z - Math.PI / 2) : 0;
+    return { x: sp.position.x - Math.sin(h) * doorOff * doorSide, y: sp.position.y + Math.cos(h) * doorOff * doorSide };
+};
+
 GTA.Player.prototype.enterNearestCar = function () {
     var cars = (GTA.allCars || []).concat(GTA.aiCarsPath || []);
     if (!cars || cars.length === 0) return;
 
-    var nearest = null;
-    var nearestDist = 100; // tem que estar encostado no carro pra roubar (antes 250 = longe demais)
+    var nearest = null, nearestDoor = null;
+    var nearestDist = 60; // tem que estar PERTO DA PORTA (nao mais do centro a 100px)
     var px = this.position.x;
     var py = this.position.y;
 
     for (var i = 0; i < cars.length; i++) {
         var c = cars[i];
         if (!c || !c.sprite || c._destroyed) continue; // nao entra em carcaca/destroco
-        var cx = c.sprite.position.x;
-        var cy = c.sprite.position.y;
-        var dx = cx - px;
-        var dy = cy - py;
+        var dp = this._doorPoint(c);
+        var dx = dp.x - px;
+        var dy = dp.y - py;
         var dist = Math.sqrt(dx*dx + dy*dy);
         if (dist < nearestDist) {
             nearestDist = dist;
             nearest = c;
+            nearestDoor = dp;
         }
     }
 
     if (nearest) {
-        if (!nearest.physics && typeof GTA.disableAICar === 'function') GTA.disableAICar(nearest);
+        var wasAI = !nearest.physics; // carro de trafego IA = tem motorista dentro
+        if (wasAI && typeof GTA.disableAICar === 'function') GTA.disableAICar(nearest);
         this.inCar = true;
         this.currentCar = nearest;
         this.physics.SetLinearVelocity(new Box2D.Common.Math.b2Vec2(0, 0));
         if (this.sprite) this.sprite.visible = false;
 
-        // Desativa IA do carro roubado â agora e o player que dirige
+        // Desativa IA do carro roubado (agora e o player que dirige)
         if (typeof GTA.disableAICar === 'function') {
             GTA.disableAICar(nearest);
         }
 
+        // CARJACK estilo GTA1: o MOTORISTA e arrancado pela porta e sai correndo
+        // (vira um pedestre normal na porta; a IA de fuga dele ja corre do player).
+        if (wasAI && nearestDoor) {
+            try {
+                var g = window._gtaGame, off = g.spriteNumbers.offset.PED;
+                var drv = new GTA.AIPedestrian(g, nearestDoor.x, nearestDoor.y, off);
+                drv.speed = (drv.speed || 2) * 1.8; // sai em panico
+                GTA.aiPedestrians.push(drv);
+            } catch (e) {}
+        }
+
         if (typeof window.GTA_onEnterCar === 'function') window.GTA_onEnterCar(nearest);
-        GTA.Log('Entrou no carro tipo ' + nearest.type);
+        GTA.Log('Entrou no carro tipo ' + nearest.type + (wasAI ? ' (motorista ejetado)' : ''));
     }
 };
 
