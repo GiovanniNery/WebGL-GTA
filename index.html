@@ -17,23 +17,23 @@
         <script src="external/raw-loader.js"></script>
         <script src="external/DataView.js"></script>
 
-        <script src="js/reader.js?v=20260703a"></script>
-        <script src="js/core.js?v=20260703a"></script>
-        <script src="js/debug.js?v=20260703a"></script>
-        <script src="js/physics.js?v=20260703a"></script>
-        <script src="js/map.js?v=20260703a"></script>
-        <script src="js/worker.js?v=20260703a"></script>
-        <script src="js/filesystem.js?v=20260703a"></script>
-        <script src="js/loader.js?v=20260703a"></script>
-        <script src="js/block.js?v=20260703a"></script>
-        <script src="js/car.js?v=20260703a"></script>
-        <script src="js/sprites.js?v=20260703a"></script>
-        <script src="js/gameobject.js?v=20260703a"></script>
-        <script src="js/person.js?v=20260703a"></script>
-        <script src="js/player.js?v=20260703a"></script>
-        <script src="js/missions.js?v=20260703a"></script>
-        <script src="js/missioncommands.js?v=20260703a"></script>
-        <script src="js/missionactions.js?v=20260703a"></script>
+        <script src="js/reader.js?v=20260703b"></script>
+        <script src="js/core.js?v=20260703b"></script>
+        <script src="js/debug.js?v=20260703b"></script>
+        <script src="js/physics.js?v=20260703b"></script>
+        <script src="js/map.js?v=20260703b"></script>
+        <script src="js/worker.js?v=20260703b"></script>
+        <script src="js/filesystem.js?v=20260703b"></script>
+        <script src="js/loader.js?v=20260703b"></script>
+        <script src="js/block.js?v=20260703b"></script>
+        <script src="js/car.js?v=20260703b"></script>
+        <script src="js/sprites.js?v=20260703b"></script>
+        <script src="js/gameobject.js?v=20260703b"></script>
+        <script src="js/person.js?v=20260703b"></script>
+        <script src="js/player.js?v=20260703b"></script>
+        <script src="js/missions.js?v=20260703b"></script>
+        <script src="js/missioncommands.js?v=20260703b"></script>
+        <script src="js/missionactions.js?v=20260703b"></script>
 
         <script>
             function start() {
@@ -174,7 +174,7 @@
 <div id="_flash" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:99989;background:rgba(255,230,80,0.35);animation:flashTiro 0.15s ease-out forwards;"></div>
 
 </body>
-<script src="js/ai.js?v=20260703a"></script>
+<script src="js/ai.js?v=20260703b"></script>
 <script>
 (function(){
 
@@ -635,9 +635,8 @@ var GTA_loadDone = false;
         card.onclick = function () { escolherPersonagem(i); };
         card.style.cssText = 'width:118px;padding:14px;background:#161616;border:3px solid transparent;border-radius:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;transition:all .12s;';
         card.innerHTML =
-            '<div style="width:32px;height:32px;border-radius:50%;background:' + c.cor + ';"></div>' +
-            '<div style="width:52px;height:44px;border-radius:9px 9px 4px 4px;background:' + c.cor + ';"></div>' +
-            '<div style="color:#ccc;font-size:11px;letter-spacing:1px;">' + c.nome + '</div>';
+            '<canvas class="_csFace" data-face="' + (i + 1) + '" width="102" height="141" style="width:84px;height:auto;border:2px solid #4a4a4a;background:#000;image-rendering:pixelated;"></canvas>' +
+            '<div style="color:#ffd23f;font-size:11px;letter-spacing:1px;background:#1a1a1a;border:1px solid #4a4a4a;padding:3px 10px;">' + c.nome + '</div>';
         cont.appendChild(card);
     });
 })();
@@ -712,6 +711,56 @@ function comecarJogo() {
     atualizarHUD();
     try { criarPickups(window._gtaGame); loopPickups(); } catch (e) {}
 }
+
+// --- Assets 24-bit do frontend original (RAW = RGB cru, sem header) ---
+function carregarRAW24(url, w, h, cb) {
+    var x = new XMLHttpRequest();
+    x.open('GET', url, true); x.responseType = 'arraybuffer';
+    x.onload = function () {
+        try {
+            var d = new Uint8Array(x.response);
+            if (d.length !== w * h * 3) return;
+            var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+            var ctx = cv.getContext('2d'), im = ctx.createImageData(w, h);
+            for (var i = 0, j = 0; i < d.length; i += 3, j += 4) {
+                im.data[j] = d[i]; im.data[j + 1] = d[i + 1]; im.data[j + 2] = d[i + 2]; im.data[j + 3] = 255;
+            }
+            ctx.putImageData(im, 0, 0); cb(cv);
+        } catch (e) {}
+    };
+    x.send();
+}
+// Fundo de ferrugem do menu original: F_UPPER (topo) + F_LOWER0 (base) = 640x480
+(function () {
+    var partes = {};
+    function tenta() {
+        if (!partes.up || !partes.low) return;
+        var cv = document.createElement('canvas'); cv.width = 640; cv.height = 480;
+        var ctx = cv.getContext('2d');
+        ctx.drawImage(partes.up, 0, 0); ctx.drawImage(partes.low, 0, 168);
+        var url = 'url(' + cv.toDataURL('image/jpeg', 0.85) + ')';
+        ['_menu', '_charSelect', '_loading'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) { el.style.backgroundImage = url; el.style.backgroundSize = 'cover'; el.style.backgroundPosition = 'center'; }
+        });
+    }
+    carregarRAW24('data/F_UPPER.RAW', 640, 168, function (cv) { partes.up = cv; tenta(); });
+    carregarRAW24('data/F_LOWER0.RAW', 640, 312, function (cv) { partes.low = cv; tenta(); });
+})();
+// Retratos originais nos cards (F_PLAY1..8.RAW, 102x141)
+(function () {
+    function pinta() {
+        var faces = document.querySelectorAll('canvas._csFace');
+        if (!faces.length) { setTimeout(pinta, 400); return; }
+        faces.forEach(function (fc) {
+            var n = fc.getAttribute('data-face');
+            carregarRAW24('data/F_PLAY' + n + '.RAW', 102, 141, function (cv) {
+                fc.getContext('2d').drawImage(cv, 0, 0);
+            });
+        });
+    }
+    pinta();
+})();
 
 // --- LOGO ORIGINAL na tela de titulo (data/F_LOGO0.RAW = 24-bit RGB 640x168) ---
 (function () {
